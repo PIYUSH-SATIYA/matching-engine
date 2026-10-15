@@ -3,7 +3,7 @@
 #include <chrono>
 #include <cstdint>
 
-using OrderId = std::unit64_t;
+using OrderId = std::uint64_t;
 using TradeId = std::uint64_t;
 
 using Price = std::int64_t;
