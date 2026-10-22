@@ -1,12 +1,10 @@
 #pragma once
 
 #include "../include/order.hpp"
-#include "../include/slab_allocator.hpp"
 #include <array>
+#include <condition_variable>
 #include <cstddef>
-#include <cstdint>
 #include <mutex>
-#include <optional>
 
 class RingBuffer {
 
@@ -18,25 +16,27 @@ private:
   // insert at tail and pop from head
   // maintain a gap of 1
 
-  std::size_t tail = 1;
+  std::size_t tail = 0;
   std::size_t head = 0;
   std::size_t count = 0;
 
   mutable std::mutex mtx;
+  std::condition_variable not_empty;
+  std::condition_variable not_full;
 
 public:
   RingBuffer() = default;
 
   RingBuffer(const RingBuffer &) = delete;
-  RingBuffer(operator=(cosnt RingBuffer&) = delete;
+  RingBuffer &operator=(const RingBuffer &) = delete;
 
   // push the order at the back
-  // return false if the buffer is full
-  bool push(const Order& ord);
+  // waits if the buffer is full
+  void push(const Order &ord);
 
-  // pop the order from the front
-  // returns std::nullopt if the buffer is empty.
-  std::optional<Order> pop();
+  // pops the order from the front and return Order obj
+  // waits if the buffer is empty.
+  Order pop();
 
   // check whether the buffer is empty.
   bool empty() const;
