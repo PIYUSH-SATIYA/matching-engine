@@ -71,37 +71,42 @@ Note: ASan and TSan cannot be combined in one build (they conflict) — build tw
 
 ```mermaid
 flowchart LR
-    subgraph Producers
-        C1[Client Thread 1]
-        C2[Client Thread 2]
-        C3[Client Thread N]
+    subgraph Clients
+        C1[Client 1]
+        C2[Client 2]
+        CN[Client N]
     end
 
     subgraph Ingestion
-        NET[Network Layer<br/>epoll or io_uring]
-        RB[(Ring Buffer<br/>lock-free / mutex)]
+        NET[Network Layer]
+        RB[Ring Buffer]
     end
 
     subgraph Core
-        ME[Matching Engine<br/>single-threaded]
-        OB[(Order Book)]
+        ME[Matching Engine]
+        OB[Order Book]
         ALLOC[Slab Allocator]
     end
 
     subgraph Output
-        TRADES[Trade Log]
-        BENCH[Latency Histogram]
+        EM[Event Manager]
+        BENCH[Benchmark Service]
+        LOG[Logging Service]
     end
 
     C1 --> NET
     C2 --> NET
-    C3 --> NET
+    CN --> NET
+
     NET --> RB
     RB --> ME
+
     ME <--> OB
-    ME --> ALLOC
-    ME --> TRADES
-    ME --> BENCH
+    OB <--> ALLOC
+
+    ME --> EM
+    EM --> BENCH
+    EM --> LOG
 ```
 
 **The one design decision that makes this tractable:** the matching engine is single-threaded — only one thread ever touches the order book. All concurrency complexity lives at the boundary (the ring buffer), not inside the matching logic. Don't let anyone propose a multi-threaded order book — that's a research problem, not a 2-month build.
