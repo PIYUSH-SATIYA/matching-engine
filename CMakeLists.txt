@@ -4,16 +4,69 @@ project(matching_engine CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# ---------------------------------------------------------------------------
+# Sanitizer build option
+# Usage:  cmake -DENABLE_SANITIZERS=ON ..
+# Note:   ASan and TSan cannot coexist — build twice if you need both.
+# ---------------------------------------------------------------------------
 option(ENABLE_SANITIZERS "Build with ASan/UBSan" OFF)
 if(ENABLE_SANITIZERS)
     add_compile_options(-fsanitize=address,undefined -g -O0)
     add_link_options(-fsanitize=address,undefined)
 endif()
 
+# ---------------------------------------------------------------------------
+# Main engine executable
+# ---------------------------------------------------------------------------
 add_executable(matching_engine
     src/main.cpp
     src/order_book.cpp
 )
-
 target_include_directories(matching_engine PRIVATE include)
 target_link_libraries(matching_engine PRIVATE pthread)
+
+# ---------------------------------------------------------------------------
+# GoogleTest — locate the system-installed shared libraries.
+# Inside the project Docker image:  apt-get install -y libgtest-dev
+# On the host (Arch-based):         pacman -S gtest  (provides .so libs)
+# ---------------------------------------------------------------------------
+option(BUILD_SLAB_ALLOCATOR_TESTS "Build SlabAllocator GoogleTest tests when available" ON)
+if(BUILD_SLAB_ALLOCATOR_TESTS)
+    find_library(GTEST_LIB gtest)
+    find_library(GTEST_MAIN_LIB gtest_main)
+endif()
+
+# ---------------------------------------------------------------------------
+# Test target — Slab Allocator unit tests (Iteration 4, Member C)
+# Build:  cmake .. && make test_slab_allocator
+# Run:    ./test_slab_allocator  (or ctest)
+# ---------------------------------------------------------------------------
+if(BUILD_SLAB_ALLOCATOR_TESTS AND GTEST_LIB AND GTEST_MAIN_LIB)
+    add_executable(test_slab_allocator
+        tests/test_slab_allocator.cpp
+    )
+    target_include_directories(test_slab_allocator PRIVATE include)
+    target_link_libraries(test_slab_allocator
+        PRIVATE ${GTEST_LIB} ${GTEST_MAIN_LIB} pthread
+    )
+
+    enable_testing()
+    add_test(NAME SlabAllocatorTests COMMAND test_slab_allocator)
+elseif(BUILD_SLAB_ALLOCATOR_TESTS)
+    message(STATUS "GoogleTest libraries not found; skipping SlabAllocator tests")
+endif()
+
+# ---------------------------------------------------------------------------
+# Benchmark target — SlabAllocator vs new/delete latency comparison
+# Build:  cmake .. && make bench_slab_allocator
+# Run:    ./bench_slab_allocator
+# ---------------------------------------------------------------------------
+add_executable(bench_slab_allocator
+    bench/bench_main.cpp
+)
+target_include_directories(bench_slab_allocator PRIVATE include)
+target_link_libraries(bench_slab_allocator PRIVATE pthread)
+# Benchmarks must be built at full optimisation — no sanitizers.
+# Compile with -O2 regardless of the global sanitizer flag so we measure
+# real allocation performance, not instrumented performance.
+target_compile_options(bench_slab_allocator PRIVATE -O2 -DNDEBUG)
