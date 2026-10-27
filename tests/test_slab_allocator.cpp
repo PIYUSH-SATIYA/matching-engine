@@ -1,508 +1,633 @@
-// ---------------------------------------------------------------------------
-// tests/test_slab_allocator.cpp
-//
-// Unit tests for SlabAllocator<T, Capacity>
-// Iteration 4 — Memory Management (Member C: Sanskar Sharma)
-//
-// Documented requirements verified here
-// ──────────────────────────────────────
-// 1. Basic alloc / dealloc — allocate, write, read back, deallocate.
-// 2. Pool exhaustion        — allocate returns nullptr when full.
-// 3. Unique slot addresses  — no two concurrent allocations alias.
-// 4. LIFO slot reuse        — freed slot is immediately reused on next alloc.
-// 5. Out-of-order free      — free in arbitrary order, refill to Capacity.
-// 6. owns() correctness     — accepts pool ptrs, rejects alien ptrs.
-// 7. Edge cases             — Capacity == 1, mid-slot alien ptr, boundary ptrs.
-// 8. Counters               — available(), allocated(), is_full() are consistent.
-//
-// Build (host, no cmake):
-//   g++ -std=c++20 -Wall -Wextra -fsanitize=address,undefined
-//       -I include tests/test_slab_allocator.cpp
-//       -lgtest -lgtest_main -pthread -o test_slab_allocator
-// Run:
-//   ./test_slab_allocator
-// ---------------------------------------------------------------------------
-
-#include <gtest/gtest.h>
-
 #include "slab_allocator.hpp"
+
 #include "order.hpp"
 
-#include <algorithm>    // std::shuffle
+#include <algorithm>
 #include <array>
 #include <cstdint>
+#include <iostream>
+#include <new>
 #include <random>
 #include <set>
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+namespace {
 
-// Make a fully-initialised Order so sanitisers can verify field reads.
-static Order make_order(OrderId id, Side side = Side::Buy,
-                        Price price = 100, Quantity qty = 10) {
-    return Order{id, side, price, qty, {}};
+int failures = 0;
+
+void check(bool condition, const char *message) {
+  if (!condition) {
+    std::cerr << "fail: " << message << '\n';
+    ++failures;
+  }
 }
 
-// Shorthand allocator type used by most tests.
+Order make_order(OrderId id, Side side = Side::Buy, Price price = 100,
+                 Quantity qty = 10) {
+  return Order{id, side, price, qty, {}};
+}
+
 using SmallSlab = SlabAllocator<Order, 8>;
 
 struct alignas(64) OverAligned {
-    std::uint64_t value;
+  std::uint64_t value;
 };
 
 struct LifetimeTracked {
-    static int constructions;
-    static int destructions;
-    std::uint64_t value;
-    explicit LifetimeTracked(std::uint64_t v) : value(v) { ++constructions; }
-    ~LifetimeTracked() { ++destructions; }
+  static int constructions;
+  static int destructions;
+
+  std::uint64_t value;
+
+  explicit LifetimeTracked(std::uint64_t v) : value(v) { ++constructions; }
+  ~LifetimeTracked() { ++destructions; }
 };
+
 int LifetimeTracked::constructions = 0;
 int LifetimeTracked::destructions = 0;
 
-// ---------------------------------------------------------------------------
-// Test suite 1 — Basic allocation and deallocation
-// ---------------------------------------------------------------------------
+void test_allocate_returns_non_null() {
+  SmallSlab slab;
+  Order *p = slab.allocate();
+  check(p != nullptr, "allocate should return a non-null pointer");
+  if (p == nullptr) {
+    return;
+  }
 
-TEST(SlabAllocatorBasic, AllocateReturnsNonNull) {
-    SmallSlab slab;
-    Order* p = slab.allocate();
-    ASSERT_NE(p, nullptr);
-    // Construct and read back to let ASan verify the memory is writable.
+  new (p) Order(make_order(1));
+  check(p->id == 1, "allocated slot should be readable and writable");
+  p->~Order();
+  slab.deallocate(p);
+}
+
+void test_deallocate_restores_availability() {
+  SmallSlab slab;
+  check(slab.available() == 8, "new pool should have all slots available");
+
+  Order *p = slab.allocate();
+  check(p != nullptr, "allocate should succeed");
+  if (p == nullptr) {
+    return;
+  }
+
+  check(slab.available() == 7, "available should decrease after allocate");
+  check(slab.allocated() == 1, "allocated should increase after allocate");
+
+  new (p) Order(make_order(2));
+  p->~Order();
+  slab.deallocate(p);
+
+  check(slab.available() == 8, "available should be restored after deallocate");
+  check(slab.allocated() == 0, "allocated should be zero after deallocate");
+}
+
+void test_multiple_alloc_dealloc_cycles() {
+  SmallSlab slab;
+
+  for (int cycle = 0; cycle < 5; ++cycle) {
+    Order *p = slab.allocate();
+    check(p != nullptr, "allocate should succeed in every cycle");
+    if (p == nullptr) {
+      return;
+    }
+
+    new (p) Order(make_order(static_cast<OrderId>(cycle)));
+    check(p->id == static_cast<OrderId>(cycle),
+          "allocated slot should retain written data");
+    p->~Order();
+    slab.deallocate(p);
+    check(slab.available() == 8,
+          "pool should return to full capacity after each cycle");
+  }
+}
+
+void test_counters_consistent_throughout_lifecycle() {
+  SmallSlab slab;
+  check(slab.capacity() == 8, "capacity should be 8");
+  check(slab.available() == 8, "new pool should be fully available");
+  check(slab.allocated() == 0, "new pool should have nothing allocated");
+  check(!slab.is_full(), "new pool should not be full");
+
+  std::array<Order *, 8> ptrs{};
+  for (std::size_t i = 0; i < 8; ++i) {
+    ptrs[i] = slab.allocate();
+    check(ptrs[i] != nullptr, "allocate should succeed while slots remain");
+    if (ptrs[i] == nullptr) {
+      return;
+    }
+
+    new (ptrs[i]) Order(make_order(static_cast<OrderId>(i + 100)));
+    check(slab.available() == 8 - i - 1,
+          "available should track allocated slots");
+    check(slab.allocated() == i + 1,
+          "allocated should track allocated slots");
+  }
+  check(slab.is_full(), "pool should report full when all slots are used");
+
+  for (std::size_t i = 0; i < 8; ++i) {
+    ptrs[i]->~Order();
+    slab.deallocate(ptrs[i]);
+    check(slab.available() == i + 1,
+          "available should increase after each deallocate");
+    check(slab.allocated() == 8 - i - 1,
+          "allocated should decrease after each deallocate");
+  }
+  check(!slab.is_full(), "pool should not be full after draining");
+}
+
+void test_returns_nullptr_when_full() {
+  SmallSlab slab;
+  std::array<Order *, 8> ptrs{};
+
+  for (auto &p : ptrs) {
+    p = slab.allocate();
+    check(p != nullptr, "allocate should succeed until pool is exhausted");
+    if (p == nullptr) {
+      return;
+    }
     new (p) Order(make_order(1));
-    EXPECT_EQ(p->id, 1u);
+  }
+  check(slab.is_full(), "pool should be full after 8 allocations");
+
+  Order *overflow = slab.allocate();
+  check(overflow == nullptr, "allocate should return nullptr when full");
+
+  for (auto &p : ptrs) {
     p->~Order();
     slab.deallocate(p);
+  }
 }
 
-TEST(SlabAllocatorBasic, DeallocateRestoresAvailability) {
-    SmallSlab slab;
-    EXPECT_EQ(slab.available(), 8u);
-    Order* p = slab.allocate();
-    EXPECT_EQ(slab.available(), 7u);
-    EXPECT_EQ(slab.allocated(), 1u);
-    new (p) Order(make_order(2));
-    p->~Order();
-    slab.deallocate(p);
-    EXPECT_EQ(slab.available(), 8u);
-    EXPECT_EQ(slab.allocated(), 0u);
-}
+void test_recovery_after_exhaustion() {
+  SmallSlab slab;
+  std::array<Order *, 8> ptrs{};
 
-TEST(SlabAllocatorBasic, MultipleAllocDeallocCycles) {
-    SmallSlab slab;
-    // Run 5 allocate → use → deallocate cycles; pool must stay consistent.
-    for (int cycle = 0; cycle < 5; ++cycle) {
-        Order* p = slab.allocate();
-        ASSERT_NE(p, nullptr) << "cycle " << cycle;
-        new (p) Order(make_order(static_cast<OrderId>(cycle)));
-        EXPECT_EQ(p->id, static_cast<OrderId>(cycle));
-        p->~Order();
-        slab.deallocate(p);
-        EXPECT_EQ(slab.available(), 8u);
+  for (auto &p : ptrs) {
+    p = slab.allocate();
+    check(p != nullptr, "allocate should succeed while filling pool");
+    if (p == nullptr) {
+      return;
     }
-}
+    new (p) Order(make_order(1));
+  }
 
-TEST(SlabAllocatorBasic, CountersConsistentThroughoutLifecycle) {
-    SmallSlab slab;
-    EXPECT_EQ(slab.capacity(),  8u);
-    EXPECT_EQ(slab.available(), 8u);
-    EXPECT_EQ(slab.allocated(), 0u);
-    EXPECT_FALSE(slab.is_full());
+  check(slab.allocate() == nullptr, "allocate should fail when full");
 
-    std::array<Order*, 8> ptrs{};
-    for (std::size_t i = 0; i < 8; ++i) {
-        ptrs[i] = slab.allocate();
-        ASSERT_NE(ptrs[i], nullptr);
-        new (ptrs[i]) Order(make_order(static_cast<OrderId>(i + 100)));
-        EXPECT_EQ(slab.available(), 8 - i - 1);
-        EXPECT_EQ(slab.allocated(), i + 1);
-    }
-    EXPECT_TRUE(slab.is_full());
+  ptrs[0]->~Order();
+  slab.deallocate(ptrs[0]);
+  ptrs[0] = nullptr;
 
-    for (std::size_t i = 0; i < 8; ++i) {
-        ptrs[i]->~Order();
-        slab.deallocate(ptrs[i]);
-        EXPECT_EQ(slab.available(), i + 1);
-        EXPECT_EQ(slab.allocated(), 8 - i - 1);
-    }
-    EXPECT_FALSE(slab.is_full());
-}
-
-// ---------------------------------------------------------------------------
-// Test suite 2 — Pool exhaustion (documented requirement)
-// ---------------------------------------------------------------------------
-
-TEST(SlabAllocatorExhaustion, ReturnsNullptrWhenFull) {
-    SmallSlab slab;
-    std::array<Order*, 8> ptrs{};
-    for (auto& p : ptrs) {
-        p = slab.allocate();
-        ASSERT_NE(p, nullptr);
-        new (p) Order(make_order(1));
-    }
-    EXPECT_TRUE(slab.is_full());
-
-    // The (Capacity + 1)-th allocation must return nullptr, no crash.
-    Order* overflow = slab.allocate();
-    EXPECT_EQ(overflow, nullptr);
-
-    // Cleanup.
-    for (auto& p : ptrs) { p->~Order(); slab.deallocate(p); }
-}
-
-TEST(SlabAllocatorExhaustion, RecoveryAfterExhaustion) {
-    SmallSlab slab;
-    std::array<Order*, 8> ptrs{};
-    for (auto& p : ptrs) { p = slab.allocate(); new (p) Order(make_order(1)); }
-
-    EXPECT_EQ(slab.allocate(), nullptr);
-
-    // Free one slot — pool should recover.
-    ptrs[0]->~Order();
-    slab.deallocate(ptrs[0]);
-    ptrs[0] = nullptr;
-
-    Order* recovered = slab.allocate();
-    ASSERT_NE(recovered, nullptr);
-    new (recovered) Order(make_order(99));
-    EXPECT_EQ(recovered->id, 99u);
-
-    // Cleanup remaining.
-    recovered->~Order(); slab.deallocate(recovered);
+  Order *recovered = slab.allocate();
+  check(recovered != nullptr, "pool should recover after freeing a slot");
+  if (recovered == nullptr) {
     for (std::size_t i = 1; i < 8; ++i) {
-        ptrs[i]->~Order(); slab.deallocate(ptrs[i]);
+      ptrs[i]->~Order();
+      slab.deallocate(ptrs[i]);
     }
-    EXPECT_EQ(slab.available(), 8u);
+    return;
+  }
+
+  new (recovered) Order(make_order(99));
+  check(recovered->id == 99, "recovered slot should be usable");
+  recovered->~Order();
+  slab.deallocate(recovered);
+
+  for (std::size_t i = 1; i < 8; ++i) {
+    ptrs[i]->~Order();
+    slab.deallocate(ptrs[i]);
+  }
+  check(slab.available() == 8, "pool should be fully available after cleanup");
 }
 
-// ---------------------------------------------------------------------------
-// Test suite 3 — Unique slot addresses
-// ---------------------------------------------------------------------------
+void test_all_allocated_pointers_are_distinct() {
+  SmallSlab slab;
+  std::set<Order *> seen;
+  std::array<Order *, 8> ptrs{};
 
-TEST(SlabAllocatorUniqueness, AllAllocatedPointersAreDistinct) {
-    SmallSlab slab;
-    std::set<Order*> seen;
-    std::array<Order*, 8> ptrs{};
-
-    for (std::size_t i = 0; i < 8; ++i) {
-        ptrs[i] = slab.allocate();
-        ASSERT_NE(ptrs[i], nullptr);
-        // Each pointer must be unique — no aliasing.
-        EXPECT_TRUE(seen.insert(ptrs[i]).second)
-            << "Duplicate pointer returned at index " << i;
-        new (ptrs[i]) Order(make_order(static_cast<OrderId>(i)));
+  for (std::size_t i = 0; i < 8; ++i) {
+    ptrs[i] = slab.allocate();
+    check(ptrs[i] != nullptr, "allocate should return a slot");
+    if (ptrs[i] == nullptr) {
+      return;
     }
+    check(seen.insert(ptrs[i]).second,
+          "allocate should never return a duplicate pointer");
+    new (ptrs[i]) Order(make_order(static_cast<OrderId>(i)));
+  }
 
-    for (auto& p : ptrs) { p->~Order(); slab.deallocate(p); }
+  for (auto &p : ptrs) {
+    p->~Order();
+    slab.deallocate(p);
+  }
 }
 
-TEST(SlabAllocatorUniqueness, AllPointersInPoolRange) {
-    SmallSlab slab;
-    std::array<Order*, 8> ptrs{};
-    for (std::size_t i = 0; i < 8; ++i) {
-        ptrs[i] = slab.allocate();
-        ASSERT_NE(ptrs[i], nullptr);
-        EXPECT_TRUE(slab.owns(ptrs[i]))
-            << "Returned pointer not owned by pool at index " << i;
+void test_all_pointers_in_pool_range() {
+  SmallSlab slab;
+  std::array<Order *, 8> ptrs{};
+
+  for (std::size_t i = 0; i < 8; ++i) {
+    ptrs[i] = slab.allocate();
+    check(ptrs[i] != nullptr, "allocate should return a slot");
+    if (ptrs[i] == nullptr) {
+      return;
     }
-    for (auto& p : ptrs) { p->~Order(); slab.deallocate(p); }
+    check(slab.owns(ptrs[i]), "owned pointer should be inside the pool");
+  }
+
+  for (auto &p : ptrs) {
+    p->~Order();
+    slab.deallocate(p);
+  }
 }
 
-// ---------------------------------------------------------------------------
-// Test suite 4 — LIFO slot reuse (free list is LIFO by design)
-// ---------------------------------------------------------------------------
+void test_freed_slot_is_reused_immediately() {
+  SmallSlab slab;
 
-TEST(SlabAllocatorReuse, FreedSlotIsReusedImmediately) {
-    SmallSlab slab;
+  Order *a = slab.allocate();
+  Order *b = slab.allocate();
+  check(a != nullptr && b != nullptr, "two allocations should succeed");
+  if (a == nullptr || b == nullptr) {
+    return;
+  }
 
-    Order* a = slab.allocate();
-    Order* b = slab.allocate();
-    ASSERT_NE(a, nullptr);
-    ASSERT_NE(b, nullptr);
-    new (a) Order(make_order(1));
-    new (b) Order(make_order(2));
+  new (a) Order(make_order(1));
+  new (b) Order(make_order(2));
 
-    // Deallocate b — it goes to the head of the free list.
-    b->~Order();
-    slab.deallocate(b);
+  b->~Order();
+  slab.deallocate(b);
 
-    // Next allocation must return the slot that was b (LIFO).
-    Order* c = slab.allocate();
-    EXPECT_EQ(c, b) << "Expected LIFO reuse of last-freed slot";
-    new (c) Order(make_order(3));
-
-    // Cleanup.
-    a->~Order(); slab.deallocate(a);
-    c->~Order(); slab.deallocate(c);
-    EXPECT_EQ(slab.available(), 8u);
-}
-
-// ---------------------------------------------------------------------------
-// Test suite 5 — Out-of-order freeing (documented requirement)
-// ---------------------------------------------------------------------------
-
-TEST(SlabAllocatorOutOfOrderFree, ArbitraryDeallocOrderPreservesAllSlots) {
-    SmallSlab slab;
-    std::array<Order*, 8> ptrs{};
-
-    for (std::size_t i = 0; i < 8; ++i) {
-        ptrs[i] = slab.allocate();
-        ASSERT_NE(ptrs[i], nullptr);
-        new (ptrs[i]) Order(make_order(static_cast<OrderId>(i)));
-    }
-
-    // Shuffle the pointers so they are freed in a random order.
-    std::mt19937 rng(42);  // fixed seed for reproducibility
-    std::shuffle(ptrs.begin(), ptrs.end(), rng);
-
-    for (auto& p : ptrs) {
-        p->~Order();
-        slab.deallocate(p);
-    }
-    EXPECT_EQ(slab.available(), 8u);
-
-    // After shuffled free, every slot must be re-allocatable.
-    std::array<Order*, 8> ptrs2{};
-    for (std::size_t i = 0; i < 8; ++i) {
-        ptrs2[i] = slab.allocate();
-        ASSERT_NE(ptrs2[i], nullptr) << "slot " << i << " not re-allocatable";
-        new (ptrs2[i]) Order(make_order(static_cast<OrderId>(i + 100)));
-    }
-    EXPECT_TRUE(slab.is_full());
-
-    for (auto& p : ptrs2) { p->~Order(); slab.deallocate(p); }
-    EXPECT_EQ(slab.available(), 8u);
-}
-
-TEST(SlabAllocatorOutOfOrderFree, NoSlotLostAfterManyShuffledCycles) {
-    // Run 10 full allocate-shuffle-free cycles; pool must always return to
-    // Capacity available slots (no "lost" slots).
-    SmallSlab slab;
-    std::mt19937 rng(1337);
-
-    for (int cycle = 0; cycle < 10; ++cycle) {
-        std::array<Order*, 8> ptrs{};
-        for (auto& p : ptrs) {
-            p = slab.allocate();
-            ASSERT_NE(p, nullptr) << "cycle " << cycle;
-            new (p) Order(make_order(1));
-        }
-        std::shuffle(ptrs.begin(), ptrs.end(), rng);
-        for (auto& p : ptrs) { p->~Order(); slab.deallocate(p); }
-        EXPECT_EQ(slab.available(), 8u) << "slot leak in cycle " << cycle;
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Test suite 6 — owns() correctness
-// ---------------------------------------------------------------------------
-
-TEST(SlabAllocatorOwns, AcceptsPointersFromPool) {
-    SmallSlab slab;
-    std::array<Order*, 8> ptrs{};
-    for (std::size_t i = 0; i < 8; ++i) {
-        ptrs[i] = slab.allocate();
-        EXPECT_TRUE(slab.owns(ptrs[i])) << "index " << i;
-    }
-    for (auto& p : ptrs) { p->~Order(); slab.deallocate(p); }
-}
-
-TEST(SlabAllocatorOwns, RejectsStackPointer) {
-    SmallSlab slab;
-    Order stack_order = make_order(99);
-    EXPECT_FALSE(slab.owns(&stack_order));
-}
-
-TEST(SlabAllocatorOwns, RejectsHeapPointer) {
-    SmallSlab slab;
-    Order* heap_order = new Order(make_order(99));
-    EXPECT_FALSE(slab.owns(heap_order));
-    delete heap_order;
-}
-
-TEST(SlabAllocatorOwns, RejectsMidSlotPointer) {
-    // A pointer that is inside pool boundaries but NOT on a slot boundary
-    // should be rejected by the alignment check in owns().
-    SmallSlab slab;
-    Order* a = slab.allocate();
-    ASSERT_NE(a, nullptr);
-    new (a) Order(make_order(1));
-
-    // Create a byte-offset pointer into the middle of slot 0.
-    // We intentionally cast through char* to do pointer arithmetic.
-    // owns() should return false for mid-slot addresses.
-    auto* mid = reinterpret_cast<Order*>(
-        reinterpret_cast<char*>(a) + 1
-    );
-    EXPECT_FALSE(slab.owns(mid));
-
+  Order *c = slab.allocate();
+  check(c == b, "next allocation should reuse the last freed slot");
+  if (c == nullptr) {
     a->~Order();
     slab.deallocate(a);
+    return;
+  }
+
+  new (c) Order(make_order(3));
+
+  a->~Order();
+  slab.deallocate(a);
+  c->~Order();
+  slab.deallocate(c);
+  check(slab.available() == 8, "pool should be fully available after cleanup");
 }
 
-TEST(SlabAllocatorOwns, RejectsNullptr) {
-    SmallSlab slab;
-    // owns() must not crash on nullptr; it should return false.
-    EXPECT_FALSE(slab.owns(nullptr));
-}
+void test_arbitrary_dealloc_order_preserves_all_slots() {
+  SmallSlab slab;
+  std::array<Order *, 8> ptrs{};
 
-TEST(SlabAllocatorOwns, InvalidDeallocationDoesNotChangeState) {
-    SmallSlab slab;
-    Order foreign = make_order(88);
-    EXPECT_FALSE(slab.deallocate(nullptr));
-    EXPECT_FALSE(slab.deallocate(&foreign));
-    EXPECT_EQ(slab.available(), 8u);
-    EXPECT_EQ(slab.allocated(), 0u);
-    Order* p = slab.allocate();
-    ASSERT_NE(p, nullptr);
-    new (p) Order(make_order(89));
-    EXPECT_FALSE(slab.deallocate(reinterpret_cast<Order*>(
-        reinterpret_cast<char*>(p) + 1)));
-    EXPECT_EQ(slab.available(), 7u);
-    p->~Order();
-    EXPECT_TRUE(slab.deallocate(p));
-}
-
-TEST(SlabAllocatorOwns, DoubleFreeIsRejectedWithoutCorruptingFreeList) {
-    SmallSlab slab;
-    Order* p = slab.allocate();
-    ASSERT_NE(p, nullptr);
-    new (p) Order(make_order(90));
-    p->~Order();
-    ASSERT_TRUE(slab.deallocate(p));
-    EXPECT_FALSE(slab.deallocate(p));
-    EXPECT_EQ(slab.available(), 8u);
-    EXPECT_EQ(slab.allocated(), 0u);
-
-    std::set<Order*> seen;
-    std::array<Order*, 8> slots{};
-    for (auto& slot : slots) {
-        slot = slab.allocate();
-        ASSERT_NE(slot, nullptr);
-        EXPECT_TRUE(seen.insert(slot).second);
-        new (slot) Order(make_order(91));
+  for (std::size_t i = 0; i < 8; ++i) {
+    ptrs[i] = slab.allocate();
+    check(ptrs[i] != nullptr, "allocate should succeed while filling pool");
+    if (ptrs[i] == nullptr) {
+      return;
     }
-    EXPECT_EQ(slab.allocate(), nullptr);
-    for (auto* slot : slots) {
-        slot->~Order();
-        EXPECT_TRUE(slab.deallocate(slot));
-    }
-}
+    new (ptrs[i]) Order(make_order(static_cast<OrderId>(i)));
+  }
 
-TEST(SlabAllocatorAlignment, SupportsOverAlignedTypes) {
-    SlabAllocator<OverAligned, 4> slab;
-    std::array<OverAligned*, 4> slots{};
-    for (auto& slot : slots) {
-        slot = slab.allocate();
-        ASSERT_NE(slot, nullptr);
-        EXPECT_EQ(reinterpret_cast<std::uintptr_t>(slot) % alignof(OverAligned), 0u);
-        new (slot) OverAligned{42};
-        EXPECT_EQ(slot->value, 42u);
-    }
-    for (auto* slot : slots) {
-        slot->~OverAligned();
-        EXPECT_TRUE(slab.deallocate(slot));
-    }
-}
+  std::mt19937 rng(42);
+  std::shuffle(ptrs.begin(), ptrs.end(), rng);
 
-TEST(SlabAllocatorLifetime, CallerControlsConstructionAndDestruction) {
-    LifetimeTracked::constructions = 0;
-    LifetimeTracked::destructions = 0;
-    SlabAllocator<LifetimeTracked, 2> slab;
-    LifetimeTracked* p = slab.allocate();
-    ASSERT_NE(p, nullptr);
-    EXPECT_EQ(LifetimeTracked::constructions, 0);
-    new (p) LifetimeTracked(123);
-    EXPECT_EQ(LifetimeTracked::constructions, 1);
-    EXPECT_EQ(p->value, 123u);
-    p->~LifetimeTracked();
-    EXPECT_EQ(LifetimeTracked::destructions, 1);
-    EXPECT_TRUE(slab.deallocate(p));
-}
-
-// ---------------------------------------------------------------------------
-// Test suite 7 — Edge cases
-// ---------------------------------------------------------------------------
-
-TEST(SlabAllocatorEdge, CapacityOne) {
-    // Pool of size 1: allocate succeeds, second returns nullptr, dealloc
-    // restores, allocate succeeds again.
-    SlabAllocator<Order, 1> slab;
-    EXPECT_EQ(slab.capacity(),  1u);
-    EXPECT_EQ(slab.available(), 1u);
-
-    Order* p = slab.allocate();
-    ASSERT_NE(p, nullptr);
-    new (p) Order(make_order(7));
-    EXPECT_EQ(slab.available(), 0u);
-    EXPECT_TRUE(slab.is_full());
-
-    EXPECT_EQ(slab.allocate(), nullptr);
-
+  for (auto &p : ptrs) {
     p->~Order();
     slab.deallocate(p);
-    EXPECT_EQ(slab.available(), 1u);
+  }
+  check(slab.available() == 8, "shuffled frees should return all slots");
 
-    Order* p2 = slab.allocate();
-    ASSERT_NE(p2, nullptr);
-    new (p2) Order(make_order(8));
-    p2->~Order();
-    slab.deallocate(p2);
-}
-
-TEST(SlabAllocatorEdge, LargeCapacityNoLeak) {
-    // Capacity 1024: full fill then full free — no counter leak.
-    constexpr std::size_t N = 1024;
-    SlabAllocator<Order, N> slab;
-    EXPECT_EQ(slab.available(), N);
-
-    std::array<Order*, N> ptrs{};
-    for (std::size_t i = 0; i < N; ++i) {
-        ptrs[i] = slab.allocate();
-        ASSERT_NE(ptrs[i], nullptr) << "slot " << i;
-        new (ptrs[i]) Order(make_order(static_cast<OrderId>(i)));
+  std::array<Order *, 8> ptrs2{};
+  for (std::size_t i = 0; i < 8; ++i) {
+    ptrs2[i] = slab.allocate();
+    check(ptrs2[i] != nullptr, "every slot should be re-allocatable");
+    if (ptrs2[i] == nullptr) {
+      return;
     }
-    EXPECT_TRUE(slab.is_full());
-    EXPECT_EQ(slab.allocate(), nullptr);
+    new (ptrs2[i]) Order(make_order(static_cast<OrderId>(i + 100)));
+  }
+  check(slab.is_full(), "pool should refill after shuffled frees");
 
-    for (auto& p : ptrs) { p->~Order(); slab.deallocate(p); }
-    EXPECT_EQ(slab.available(), N);
+  for (auto &p : ptrs2) {
+    p->~Order();
+    slab.deallocate(p);
+  }
+  check(slab.available() == 8, "pool should be fully available after cleanup");
 }
 
-TEST(SlabAllocatorEdge, DataSurvivesAllocDealloc) {
-    // Verify data written into an allocated slot is not corrupted by
-    // subsequent alloc/dealloc of other slots (no clobbering via free list).
-    SmallSlab slab;
+void test_no_slot_lost_after_many_shuffled_cycles() {
+  SmallSlab slab;
+  std::mt19937 rng(1337);
 
-    Order* a = slab.allocate();
-    Order* b = slab.allocate();
-    Order* c = slab.allocate();
-    ASSERT_NE(a, nullptr);
-    ASSERT_NE(b, nullptr);
-    ASSERT_NE(c, nullptr);
+  for (int cycle = 0; cycle < 10; ++cycle) {
+    std::array<Order *, 8> ptrs{};
+    for (auto &p : ptrs) {
+      p = slab.allocate();
+      check(p != nullptr, "allocate should succeed in every cycle");
+      if (p == nullptr) {
+        return;
+      }
+      new (p) Order(make_order(1));
+    }
 
-    new (a) Order(make_order(10, Side::Buy,  500, 20));
-    new (b) Order(make_order(11, Side::Sell, 510, 30));
-    new (c) Order(make_order(12, Side::Buy,  495, 15));
+    std::shuffle(ptrs.begin(), ptrs.end(), rng);
+    for (auto &p : ptrs) {
+      p->~Order();
+      slab.deallocate(p);
+    }
+    check(slab.available() == 8, "no slot should leak between cycles");
+  }
+}
 
-    // Free and re-allocate b; a and c must be undisturbed.
-    b->~Order();
-    slab.deallocate(b);
-    Order* d = slab.allocate(); // should reuse b's slot
-    new (d) Order(make_order(99, Side::Sell, 600, 5));
+void test_owns_accepts_pointers_from_pool() {
+  SmallSlab slab;
+  std::array<Order *, 8> ptrs{};
 
-    EXPECT_EQ(a->id,       10u);
-    EXPECT_EQ(a->price,    500);
-    EXPECT_EQ(a->quantity, 20u);
+  for (std::size_t i = 0; i < 8; ++i) {
+    ptrs[i] = slab.allocate();
+    check(ptrs[i] != nullptr, "allocate should succeed");
+    if (ptrs[i] == nullptr) {
+      return;
+    }
+    check(slab.owns(ptrs[i]), "owns should accept pool pointers");
+  }
 
-    EXPECT_EQ(c->id,       12u);
-    EXPECT_EQ(c->price,    495);
-    EXPECT_EQ(c->quantity, 15u);
+  for (auto &p : ptrs) {
+    p->~Order();
+    slab.deallocate(p);
+  }
+}
 
-    EXPECT_EQ(d->id,       99u);
+void test_owns_rejects_stack_pointer() {
+  SmallSlab slab;
+  Order stack_order = make_order(99);
+  check(!slab.owns(&stack_order), "owns should reject a stack pointer");
+}
 
-    a->~Order(); slab.deallocate(a);
-    c->~Order(); slab.deallocate(c);
-    d->~Order(); slab.deallocate(d);
+void test_owns_rejects_heap_pointer() {
+  SmallSlab slab;
+  Order *heap_order = new Order(make_order(99));
+  check(!slab.owns(heap_order), "owns should reject a heap pointer");
+  delete heap_order;
+}
+
+void test_owns_rejects_mid_slot_pointer() {
+  SmallSlab slab;
+  Order *a = slab.allocate();
+  check(a != nullptr, "allocate should succeed");
+  if (a == nullptr) {
+    return;
+  }
+  new (a) Order(make_order(1));
+
+  auto *mid = reinterpret_cast<Order *>(reinterpret_cast<char *>(a) + 1);
+  check(!slab.owns(mid), "owns should reject a mid-slot pointer");
+
+  a->~Order();
+  slab.deallocate(a);
+}
+
+void test_owns_rejects_nullptr() {
+  SmallSlab slab;
+  check(!slab.owns(nullptr), "owns should reject nullptr");
+}
+
+void test_invalid_deallocation_does_not_change_state() {
+  SmallSlab slab;
+  Order foreign = make_order(88);
+
+  check(!slab.deallocate(nullptr), "deallocate should reject nullptr");
+  check(!slab.deallocate(&foreign), "deallocate should reject foreign pointers");
+  check(slab.available() == 8,
+        "invalid deallocate should not change availability");
+  check(slab.allocated() == 0,
+        "invalid deallocate should not change allocation count");
+
+  Order *p = slab.allocate();
+  check(p != nullptr, "allocate should succeed");
+  if (p == nullptr) {
+    return;
+  }
+  new (p) Order(make_order(89));
+
+  auto *mid = reinterpret_cast<Order *>(reinterpret_cast<char *>(p) + 1);
+  check(!slab.deallocate(mid), "deallocate should reject mid-slot pointers");
+  check(slab.available() == 7,
+        "rejected deallocate should leave the slot allocated");
+
+  p->~Order();
+  check(slab.deallocate(p), "deallocate should accept a valid slot");
+}
+
+void test_double_free_is_rejected_without_corrupting_free_list() {
+  SmallSlab slab;
+  Order *p = slab.allocate();
+  check(p != nullptr, "allocate should succeed");
+  if (p == nullptr) {
+    return;
+  }
+
+  new (p) Order(make_order(90));
+  p->~Order();
+  check(slab.deallocate(p), "first deallocate should succeed");
+  check(!slab.deallocate(p), "second deallocate should be rejected");
+  check(slab.available() == 8, "double free should not change availability");
+  check(slab.allocated() == 0, "double free should not change allocation count");
+
+  std::set<Order *> seen;
+  std::array<Order *, 8> slots{};
+  for (auto &slot : slots) {
+    slot = slab.allocate();
+    check(slot != nullptr, "allocate should succeed after rejected double free");
+    if (slot == nullptr) {
+      return;
+    }
+    check(seen.insert(slot).second, "free list should not contain duplicates");
+    new (slot) Order(make_order(91));
+  }
+  check(slab.allocate() == nullptr, "pool should still be exhaustible");
+
+  for (auto *slot : slots) {
+    slot->~Order();
+    check(slab.deallocate(slot), "deallocate should succeed after refill");
+  }
+}
+
+void test_supports_over_aligned_types() {
+  SlabAllocator<OverAligned, 4> slab;
+  std::array<OverAligned *, 4> slots{};
+
+  for (auto &slot : slots) {
+    slot = slab.allocate();
+    check(slot != nullptr, "allocate should succeed for over-aligned type");
+    if (slot == nullptr) {
+      return;
+    }
+    check(reinterpret_cast<std::uintptr_t>(slot) % alignof(OverAligned) == 0,
+          "slots should satisfy the type alignment");
+    new (slot) OverAligned{42};
+    check(slot->value == 42, "over-aligned slot should be writable");
+  }
+
+  for (auto *slot : slots) {
+    slot->~OverAligned();
+    check(slab.deallocate(slot), "deallocate should succeed");
+  }
+}
+
+void test_caller_controls_construction_and_destruction() {
+  LifetimeTracked::constructions = 0;
+  LifetimeTracked::destructions = 0;
+
+  SlabAllocator<LifetimeTracked, 2> slab;
+  LifetimeTracked *p = slab.allocate();
+  check(p != nullptr, "allocate should return raw storage");
+  if (p == nullptr) {
+    return;
+  }
+
+  check(LifetimeTracked::constructions == 0,
+        "allocate should not construct the object");
+  new (p) LifetimeTracked(123);
+  check(LifetimeTracked::constructions == 1,
+        "placement new should construct the object");
+  check(p->value == 123, "constructed value should be readable");
+
+  p->~LifetimeTracked();
+  check(LifetimeTracked::destructions == 1,
+        "caller should control destruction");
+  check(slab.deallocate(p), "deallocate should succeed");
+}
+
+void test_capacity_one() {
+  SlabAllocator<Order, 1> slab;
+  check(slab.capacity() == 1, "capacity should be 1");
+  check(slab.available() == 1, "single slot should be available");
+
+  Order *p = slab.allocate();
+  check(p != nullptr, "allocate should succeed");
+  if (p == nullptr) {
+    return;
+  }
+  new (p) Order(make_order(7));
+  check(slab.available() == 0, "single slot should be consumed");
+  check(slab.is_full(), "capacity-one pool should be full");
+  check(slab.allocate() == nullptr, "second allocate should fail");
+
+  p->~Order();
+  slab.deallocate(p);
+  check(slab.available() == 1, "deallocate should restore the single slot");
+
+  Order *p2 = slab.allocate();
+  check(p2 != nullptr, "allocate should succeed after deallocate");
+  if (p2 == nullptr) {
+    return;
+  }
+  new (p2) Order(make_order(8));
+  p2->~Order();
+  slab.deallocate(p2);
+}
+
+void test_large_capacity_no_leak() {
+  constexpr std::size_t N = 1024;
+  SlabAllocator<Order, N> slab;
+  check(slab.available() == N, "large pool should start fully available");
+
+  std::array<Order *, N> ptrs{};
+  for (std::size_t i = 0; i < N; ++i) {
+    ptrs[i] = slab.allocate();
+    check(ptrs[i] != nullptr, "allocate should succeed while filling pool");
+    if (ptrs[i] == nullptr) {
+      return;
+    }
+    new (ptrs[i]) Order(make_order(static_cast<OrderId>(i)));
+  }
+  check(slab.is_full(), "large pool should become full");
+  check(slab.allocate() == nullptr, "full large pool should reject allocate");
+
+  for (auto &p : ptrs) {
+    p->~Order();
+    slab.deallocate(p);
+  }
+  check(slab.available() == N, "large pool should not leak slots");
+}
+
+void test_data_survives_alloc_dealloc() {
+  SmallSlab slab;
+
+  Order *a = slab.allocate();
+  Order *b = slab.allocate();
+  Order *c = slab.allocate();
+  check(a != nullptr && b != nullptr && c != nullptr,
+        "three allocations should succeed");
+  if (a == nullptr || b == nullptr || c == nullptr) {
+    return;
+  }
+
+  new (a) Order(make_order(10, Side::Buy, 500, 20));
+  new (b) Order(make_order(11, Side::Sell, 510, 30));
+  new (c) Order(make_order(12, Side::Buy, 495, 15));
+
+  b->~Order();
+  slab.deallocate(b);
+  Order *d = slab.allocate();
+  check(d != nullptr, "allocate should reuse the freed slot");
+  if (d == nullptr) {
+    a->~Order();
+    slab.deallocate(a);
+    c->~Order();
+    slab.deallocate(c);
+    return;
+  }
+  new (d) Order(make_order(99, Side::Sell, 600, 5));
+
+  check(a->id == 10, "first slot id should be untouched");
+  check(a->price == 500, "first slot price should be untouched");
+  check(a->quantity == 20, "first slot quantity should be untouched");
+
+  check(c->id == 12, "third slot id should be untouched");
+  check(c->price == 495, "third slot price should be untouched");
+  check(c->quantity == 15, "third slot quantity should be untouched");
+
+  check(d->id == 99, "reused slot should contain new data");
+
+  a->~Order();
+  slab.deallocate(a);
+  c->~Order();
+  slab.deallocate(c);
+  d->~Order();
+  slab.deallocate(d);
+}
+
+} // namespace
+
+int main() {
+  test_allocate_returns_non_null();
+  test_deallocate_restores_availability();
+  test_multiple_alloc_dealloc_cycles();
+  test_counters_consistent_throughout_lifecycle();
+  test_returns_nullptr_when_full();
+  test_recovery_after_exhaustion();
+  test_all_allocated_pointers_are_distinct();
+  test_all_pointers_in_pool_range();
+  test_freed_slot_is_reused_immediately();
+  test_arbitrary_dealloc_order_preserves_all_slots();
+  test_no_slot_lost_after_many_shuffled_cycles();
+  test_owns_accepts_pointers_from_pool();
+  test_owns_rejects_stack_pointer();
+  test_owns_rejects_heap_pointer();
+  test_owns_rejects_mid_slot_pointer();
+  test_owns_rejects_nullptr();
+  test_invalid_deallocation_does_not_change_state();
+  test_double_free_is_rejected_without_corrupting_free_list();
+  test_supports_over_aligned_types();
+  test_caller_controls_construction_and_destruction();
+  test_capacity_one();
+  test_large_capacity_no_leak();
+  test_data_survives_alloc_dealloc();
+
+  if (failures != 0) {
+    std::cerr << failures << " test check(s) failed.\n";
+    return 1;
+  }
+
+  std::cout << "All slab allocator tests passed.\n";
+  return 0;
 }
