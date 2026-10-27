@@ -36,6 +36,7 @@ add_executable(matching_engine
     src/main.cpp
     src/order_book.cpp
     src/ring_buffer.cpp
+    src/slab_allocator.cpp    # Explicit instantiation anchor for SlabAllocator<Order, N>
 )
 target_include_directories(matching_engine PRIVATE include)
 target_link_libraries(matching_engine PRIVATE pthread)
@@ -76,15 +77,21 @@ endif()
 # Build:  cmake .. && make bench_slab_allocator
 # Run:    ./bench_slab_allocator
 # ---------------------------------------------------------------------------
-add_executable(bench_slab_allocator
-    bench/bench_main.cpp
-)
-target_include_directories(bench_slab_allocator PRIVATE include)
-target_link_libraries(bench_slab_allocator PRIVATE pthread)
-# Benchmarks must be built at full optimisation — no sanitizers.
-# Compile with -O2 regardless of the global sanitizer flag so we measure
-# real allocation performance, not instrumented performance.
-target_compile_options(bench_slab_allocator PRIVATE -O2 -DNDEBUG)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/bench/bench_main.cpp")
+    add_executable(bench_slab_allocator bench/bench_main.cpp)
+    target_include_directories(bench_slab_allocator PRIVATE include)
+    target_link_libraries(bench_slab_allocator PRIVATE Threads::Threads)
+    # Benchmarks must be built at full optimisation — no sanitizers.
+    target_compile_options(bench_slab_allocator PRIVATE -O2 -DNDEBUG)
+else()
+    # Keep the documented target name available so aggregate/build scripts
+    # continue to configure. The benchmark itself cannot be built until its
+    # source is added.
+    message(STATUS "bench/bench_main.cpp not found; benchmark executable is unavailable")
+    add_custom_target(bench_slab_allocator
+        COMMAND ${CMAKE_COMMAND} -E echo "bench_slab_allocator unavailable: add bench/bench_main.cpp"
+    )
+endif()
 target_link_libraries(matching_engine PRIVATE Threads::Threads)
 
 # Ring buffer tests
