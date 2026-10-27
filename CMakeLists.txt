@@ -38,7 +38,7 @@ add_executable(matching_engine
     src/ring_buffer.cpp
 )
 target_include_directories(matching_engine PRIVATE include)
-target_link_libraries(matching_engine PRIVATE pthread)
+target_link_libraries(matching_engine PRIVATE pthread Threads::Threads)
 
 # ---------------------------------------------------------------------------
 # GoogleTest — locate the system-installed shared libraries.
@@ -70,22 +70,6 @@ if(BUILD_SLAB_ALLOCATOR_TESTS AND GTEST_LIB AND GTEST_MAIN_LIB)
 elseif(BUILD_SLAB_ALLOCATOR_TESTS)
     message(STATUS "GoogleTest libraries not found; skipping SlabAllocator tests")
 endif()
-
-# ---------------------------------------------------------------------------
-# Benchmark target — SlabAllocator vs new/delete latency comparison
-# Build:  cmake .. && make bench_slab_allocator
-# Run:    ./bench_slab_allocator
-# ---------------------------------------------------------------------------
-add_executable(bench_slab_allocator
-    bench/bench_main.cpp
-)
-target_include_directories(bench_slab_allocator PRIVATE include)
-target_link_libraries(bench_slab_allocator PRIVATE pthread)
-# Benchmarks must be built at full optimisation — no sanitizers.
-# Compile with -O2 regardless of the global sanitizer flag so we measure
-# real allocation performance, not instrumented performance.
-target_compile_options(bench_slab_allocator PRIVATE -O2 -DNDEBUG)
-target_link_libraries(matching_engine PRIVATE Threads::Threads)
 
 # Ring buffer tests
 enable_testing()

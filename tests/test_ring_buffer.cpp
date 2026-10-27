@@ -1,4 +1,4 @@
-#include "../include/ring_buffer.hpp"
+#include "ring_buffer.hpp"
 
 #include <atomic>
 #include <chrono>
