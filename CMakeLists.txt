@@ -41,38 +41,17 @@ target_include_directories(matching_engine PRIVATE include)
 target_link_libraries(matching_engine PRIVATE pthread Threads::Threads)
 
 # ---------------------------------------------------------------------------
-# GoogleTest — locate the system-installed shared libraries.
-# Inside the project Docker image:  apt-get install -y libgtest-dev
-# On the host (Arch-based):         pacman -S gtest  (provides .so libs)
+# Tests
 # ---------------------------------------------------------------------------
-option(BUILD_SLAB_ALLOCATOR_TESTS "Build SlabAllocator GoogleTest tests when available" ON)
-if(BUILD_SLAB_ALLOCATOR_TESTS)
-    find_library(GTEST_LIB gtest)
-    find_library(GTEST_MAIN_LIB gtest_main)
-endif()
-
-# ---------------------------------------------------------------------------
-# Test target — Slab Allocator unit tests (Iteration 4, Member C)
-# Build:  cmake .. && make test_slab_allocator
-# Run:    ./test_slab_allocator  (or ctest)
-# ---------------------------------------------------------------------------
-if(BUILD_SLAB_ALLOCATOR_TESTS AND GTEST_LIB AND GTEST_MAIN_LIB)
-    add_executable(test_slab_allocator
-        tests/test_slab_allocator.cpp
-    )
-    target_include_directories(test_slab_allocator PRIVATE include)
-    target_link_libraries(test_slab_allocator
-        PRIVATE ${GTEST_LIB} ${GTEST_MAIN_LIB} pthread
-    )
-
-    enable_testing()
-    add_test(NAME SlabAllocatorTests COMMAND test_slab_allocator)
-elseif(BUILD_SLAB_ALLOCATOR_TESTS)
-    message(STATUS "GoogleTest libraries not found; skipping SlabAllocator tests")
-endif()
-
-# Ring buffer tests
 enable_testing()
+
+add_executable(slab_allocator_test
+    tests/test_slab_allocator.cpp
+)
+
+target_include_directories(slab_allocator_test PRIVATE include)
+
+add_test(NAME slab_allocator_test COMMAND slab_allocator_test)
 
 add_executable(ring_buffer_test
     tests/test_ring_buffer.cpp
