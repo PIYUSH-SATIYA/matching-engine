@@ -1,4 +1,3 @@
-
 cmake_minimum_required(VERSION 3.16)
 project(matching_engine LANGUAGES CXX)
 
@@ -7,9 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # ---------------------------------------------------------------------------
-# Sanitizer build option
-# Usage:  cmake -DENABLE_SANITIZERS=ON ..
-# Note:   ASan and TSan cannot coexist — build twice if you need both.
+# Sanitizer build options
+# ASan/UBSan and TSan must be enabled in separate builds.
 # ---------------------------------------------------------------------------
 option(ENABLE_SANITIZERS "Build with ASan/UBSan" OFF)
 option(ENABLE_TSAN "Build with ThreadSanitizer" OFF)
@@ -36,73 +34,41 @@ add_executable(matching_engine
     src/main.cpp
     src/order_book.cpp
     src/ring_buffer.cpp
-    src/slab_allocator.cpp    # Explicit instantiation anchor for SlabAllocator<Order, N>
+    src/slab_allocator.cpp
 )
 target_include_directories(matching_engine PRIVATE include)
-target_link_libraries(matching_engine PRIVATE pthread)
-
-# ---------------------------------------------------------------------------
-# GoogleTest — locate the system-installed shared libraries.
-# Inside the project Docker image:  apt-get install -y libgtest-dev
-# On the host (Arch-based):         pacman -S gtest  (provides .so libs)
-# ---------------------------------------------------------------------------
-option(BUILD_SLAB_ALLOCATOR_TESTS "Build SlabAllocator GoogleTest tests when available" ON)
-if(BUILD_SLAB_ALLOCATOR_TESTS)
-    find_library(GTEST_LIB gtest)
-    find_library(GTEST_MAIN_LIB gtest_main)
-endif()
-
-# ---------------------------------------------------------------------------
-# Test target — Slab Allocator unit tests (Iteration 4, Member C)
-# Build:  cmake .. && make test_slab_allocator
-# Run:    ./test_slab_allocator  (or ctest)
-# ---------------------------------------------------------------------------
-if(BUILD_SLAB_ALLOCATOR_TESTS AND GTEST_LIB AND GTEST_MAIN_LIB)
-    add_executable(test_slab_allocator
-        tests/test_slab_allocator.cpp
-    )
-    target_include_directories(test_slab_allocator PRIVATE include)
-    target_link_libraries(test_slab_allocator
-        PRIVATE ${GTEST_LIB} ${GTEST_MAIN_LIB} pthread
-    )
-
-    enable_testing()
-    add_test(NAME SlabAllocatorTests COMMAND test_slab_allocator)
-elseif(BUILD_SLAB_ALLOCATOR_TESTS)
-    message(STATUS "GoogleTest libraries not found; skipping SlabAllocator tests")
-endif()
-
-# ---------------------------------------------------------------------------
-# Benchmark target — SlabAllocator vs new/delete latency comparison
-# Build:  cmake .. && make bench_slab_allocator
-# Run:    ./bench_slab_allocator
-# ---------------------------------------------------------------------------
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/bench/bench_main.cpp")
-    add_executable(bench_slab_allocator bench/bench_main.cpp)
-    target_include_directories(bench_slab_allocator PRIVATE include)
-    target_link_libraries(bench_slab_allocator PRIVATE Threads::Threads)
-    # Benchmarks must be built at full optimisation — no sanitizers.
-    target_compile_options(bench_slab_allocator PRIVATE -O2 -DNDEBUG)
-else()
-    # Keep the documented target name available so aggregate/build scripts
-    # continue to configure. The benchmark itself cannot be built until its
-    # source is added.
-    message(STATUS "bench/bench_main.cpp not found; benchmark executable is unavailable")
-    add_custom_target(bench_slab_allocator
-        COMMAND ${CMAKE_COMMAND} -E echo "bench_slab_allocator unavailable: add bench/bench_main.cpp"
-    )
-endif()
 target_link_libraries(matching_engine PRIVATE Threads::Threads)
 
-# Ring buffer tests
+# Tests
 enable_testing()
+
+add_executable(slab_allocator_test
+    tests/test_slab_allocator.cpp
+)
+target_include_directories(slab_allocator_test PRIVATE include)
+add_test(NAME slab_allocator_test COMMAND slab_allocator_test)
 
 add_executable(ring_buffer_test
     tests/test_ring_buffer.cpp
     src/ring_buffer.cpp
 )
-
 target_include_directories(ring_buffer_test PRIVATE include)
 target_link_libraries(ring_buffer_test PRIVATE Threads::Threads)
-
 add_test(NAME ring_buffer_test COMMAND ring_buffer_test)
+
+# Benchmark target — SlabAllocator vs new/delete latency comparison.
+# Keep the target name available for build scripts even before the benchmark
+# source lands. A real benchmark executable is created whenever its source is
+# present.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/bench/bench_main.cpp")
+    add_executable(bench_slab_allocator bench/bench_main.cpp)
+    target_include_directories(bench_slab_allocator PRIVATE include)
+    target_link_libraries(bench_slab_allocator PRIVATE Threads::Threads)
+    target_compile_options(bench_slab_allocator PRIVATE -O2 -DNDEBUG)
+else()
+    message(STATUS "bench/bench_main.cpp not found; benchmark executable is unavailable")
+    add_custom_target(bench_slab_allocator
+        COMMAND ${CMAKE_COMMAND} -E echo
+            "bench_slab_allocator unavailable: add bench/bench_main.cpp"
+    )
+endif()
