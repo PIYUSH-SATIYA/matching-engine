@@ -52,6 +52,17 @@
 #include <cstdint>
 #include <cstring>
 
+namespace slab_allocator_detail {
+
+// Non-template free-list primitives are implemented in src/slab_allocator.cpp.
+void initialize_free_list(void* pool, std::size_t slot_size,
+                          std::size_t capacity) noexcept;
+bool pop_free_slot(void*& head, const void* pool, std::size_t slot_size,
+                   std::size_t capacity, void*& slot) noexcept;
+void push_free_slot(void*& head, void* slot) noexcept;
+
+} // namespace slab_allocator_detail
+
 // ---------------------------------------------------------------------------
 // SlabAllocator<T, Capacity>
 //
@@ -70,6 +81,9 @@ class SlabAllocator {
 
   static_assert(Capacity > 0,
     "SlabAllocator: Capacity must be at least 1.");
+
+  static_assert(Capacity <= static_cast<std::size_t>(-1) / sizeof(T),
+    "SlabAllocator: Capacity * sizeof(T) must fit in size_t.");
 
   static_assert(sizeof(T) >= sizeof(void*),
     "SlabAllocator: sizeof(T) must be >= sizeof(void*) so that the "
@@ -91,22 +105,14 @@ public:
   // Builds the free list by threading every slot in index order:
   //   Slot 0  →  Slot 1  →  …  →  Slot (Capacity-1)  →  nullptr
   //
-  // std::memcpy is used (instead of pointer-cast assignments) to write
-  // pointer values into std::byte storage without violating strict-aliasing
-  // rules.
+  // The non-template free-list initializer writes link pointers into the raw
+  // byte storage using memcpy, avoiding strict-aliasing violations.
   SlabAllocator() noexcept {
-    for (std::size_t i = 0; i < Capacity - 1; ++i) {
-      void* current = slot_ptr(i);
-      void* next    = slot_ptr(i + 1);
-      // Write the address of the next slot into current slot's raw bytes.
-      std::memcpy(current, &next, sizeof(void*));
-    }
-    // Last slot terminates the list.
-    void* null_ptr = nullptr;
-    std::memcpy(slot_ptr(Capacity - 1), &null_ptr, sizeof(void*));
-
+    slab_allocator_detail::initialize_free_list(pool_, SlotSize, Capacity);
     free_head_  = slot_ptr(0);
     free_count_ = Capacity;
+    allocated_count_ = 0;
+    poisoned_ = false;
   }
 
   // Destructor: in debug builds, poison the pool with 0xCD so that any
@@ -141,23 +147,37 @@ public:
   //
   // Complexity: O(1).  No system calls, no locks, no heap interaction.
   [[nodiscard]] T* allocate() noexcept {
-    if (free_head_ == nullptr) {
+    if (poisoned_) {
+      return nullptr;
+    }
+    if (free_count_ == 0 || free_head_ == nullptr) {
       // Pool exhausted — documented requirement: return nullptr, no throw.
       return nullptr;
     }
 
-    // Pop the head slot off the free list.
-    void* slot = free_head_;
+    if (!owns(static_cast<T*>(free_head_))) {
+      // The head must be a free slot before its in-slot link is read.
+      mark_corrupted();
+      return nullptr;
+    }
+    const std::size_t index = slot_index(free_head_);
+    if (allocated_[index]) {
+      mark_corrupted();
+      return nullptr;
+    }
 
-    // Read the next-pointer that was stored inside this slot when it was free.
-    void* next = nullptr;
-    std::memcpy(&next, slot, sizeof(void*));
-    free_head_ = next;
+    // Validate the current node and its link before the helper dereferences it
+    // or publishes the next head.
+    void* slot = nullptr;
+    if (!slab_allocator_detail::pop_free_slot(
+            free_head_, pool_, SlotSize, Capacity, slot)) {
+      mark_corrupted();
+      return nullptr;
+    }
 
     --free_count_;
-
-    const std::size_t index = slot_index(slot);
     allocated_[index] = true;
+    ++allocated_count_;
     // The returned pointer denotes storage; callers begin T's lifetime with
     // placement new before accessing it.
     return reinterpret_cast<T*>(slot);
@@ -177,7 +197,7 @@ public:
   //
   // Complexity: O(1).  No system calls, no locks, no heap interaction.
   bool deallocate(T* ptr) noexcept {
-    if (!owns(ptr)) {
+    if (poisoned_ || !owns(ptr)) {
       return false;
     }
     const std::size_t index = slot_index(ptr);
@@ -185,15 +205,11 @@ public:
       return false;
     }
 
-    // Push freed slot onto the head of the free list.
-    // Write the current free_head_ value into the slot's raw bytes, then
-    // point free_head_ at the now-free slot.
-    void* raw = static_cast<void*>(ptr);
-    std::memcpy(raw, &free_head_, sizeof(void*));
-    free_head_ = raw;
-
+    // Push the returned slot onto the head of the free list.
+    slab_allocator_detail::push_free_slot(free_head_, static_cast<void*>(ptr));
     allocated_[index] = false;
     ++free_count_;
+    --allocated_count_;
     return true;
   }
 
@@ -225,7 +241,7 @@ public:
 
   // is_full() — true when every slot is currently held by a caller.
   [[nodiscard]] bool is_full() const noexcept {
-    return free_count_ == 0;
+    return allocated_count_ == Capacity;
   }
 
   // available() — number of slots that can still be allocated.
@@ -235,7 +251,7 @@ public:
 
   // allocated() — number of slots currently held by callers.
   [[nodiscard]] std::size_t allocated() const noexcept {
-    return Capacity - free_count_;
+    return allocated_count_;
   }
 
   // capacity() — compile-time total slot count.
@@ -257,6 +273,12 @@ private:
     return static_cast<std::size_t>((address - start) / SlotSize);
   }
 
+  void mark_corrupted() noexcept {
+    free_head_ = nullptr;
+    free_count_ = 0;
+    poisoned_ = true;
+  }
+
   // ── Storage ───────────────────────────────────────────────────────────────
 
   // pool_ — the pre-allocated contiguous byte buffer.
@@ -276,4 +298,6 @@ private:
   // free_count_ — maintained in O(1) alongside free_head_.
   // Not required by the docs, but invaluable for assertions and benchmarking.
   std::size_t free_count_;
+  std::size_t allocated_count_;
+  bool poisoned_;
 };

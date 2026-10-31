@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <new>
 #include <random>
@@ -450,6 +451,36 @@ void test_double_free_is_rejected_without_corrupting_free_list() {
   }
 }
 
+void test_poisoned_allocator_is_full_only_when_all_slots_are_allocated() {
+  SlabAllocator<Order, 3> slab;
+  Order *first = slab.allocate();
+  Order *live = slab.allocate();
+  check(first != nullptr && live != nullptr,
+        "allocations should succeed before corrupting the free list");
+  if (first == nullptr || live == nullptr) {
+    return;
+  }
+
+  new (first) Order(make_order(92));
+  new (live) Order(make_order(93));
+  first->~Order();
+  check(slab.deallocate(first), "first slot should be returned before corruption");
+
+  void *invalid_next = reinterpret_cast<void *>(std::uintptr_t{1});
+  std::memcpy(first, &invalid_next, sizeof(invalid_next));
+  check(slab.allocate() == nullptr,
+        "allocator should reject a free-list link outside the pool");
+  check(slab.available() == 0,
+        "poisoned allocator should expose no allocatable slots");
+  check(slab.allocated() == 1,
+        "poisoning should preserve the number of live caller allocations");
+  check(!slab.is_full(),
+        "poisoned allocator should not be full while a slot is unallocated");
+  check(slab.allocate() == nullptr,
+        "poisoned allocator should reject subsequent allocations");
+  live->~Order();
+}
+
 void test_supports_over_aligned_types() {
   SlabAllocator<OverAligned, 4> slab;
   std::array<OverAligned *, 4> slots{};
@@ -617,6 +648,7 @@ int main() {
   test_owns_rejects_nullptr();
   test_invalid_deallocation_does_not_change_state();
   test_double_free_is_rejected_without_corrupting_free_list();
+  test_poisoned_allocator_is_full_only_when_all_slots_are_allocated();
   test_supports_over_aligned_types();
   test_caller_controls_construction_and_destruction();
   test_capacity_one();

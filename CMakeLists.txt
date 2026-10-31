@@ -47,6 +47,7 @@ enable_testing()
 
 add_executable(slab_allocator_test
     tests/test_slab_allocator.cpp
+    src/slab_allocator.cpp
 )
 
 target_include_directories(slab_allocator_test PRIVATE include)
