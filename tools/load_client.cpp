@@ -1,5 +1,6 @@
-// load_client HOST PORT N [seed]
+// load_client HOST PORT N [seed] [RATE]
 // Sends N random orders via TCP in wire format and prints throughput.
+// RATE>0: throttle to RATE orders/sec in batches of 64 (absolute schedule, no drift).
 
 #include <arpa/inet.h>
 #include <chrono>
@@ -13,6 +14,7 @@
 #include <netinet/tcp.h>
 #include <random>
 #include <sys/socket.h>
+#include <thread>
 #include <unistd.h>
 
 #pragma pack(push, 1)
@@ -37,6 +39,7 @@ int main(int argc, char** argv) {
     uint16_t    port = static_cast<uint16_t>(std::atoi(argv[2]));
     uint64_t    N    = static_cast<uint64_t>(std::atoll(argv[3]));
     unsigned    seed = (argc >= 5) ? static_cast<unsigned>(std::atoi(argv[4])) : 42u;
+    double      rate = (argc >= 6) ? std::atof(argv[5]) : 0.0;
 
     // Connect
     addrinfo hints{}, *res = nullptr;
@@ -66,14 +69,34 @@ int main(int argc, char** argv) {
     std::uniform_int_distribution<uint64_t> qty_dist(1, 100);
     std::uniform_int_distribution<int> side_dist(0, 1);
 
-    static constexpr std::size_t BATCH = 1024;
-    WireMsg batch[BATCH];
+    static constexpr std::size_t BATCH_THROTTLE = 64;
+    static constexpr std::size_t BATCH_FREE     = 1024;
+    const std::size_t BATCH = (rate > 0.0) ? BATCH_THROTTLE : BATCH_FREE;
+    WireMsg batch[BATCH_FREE];  // sized for the larger case
 
-    auto t_start = std::chrono::steady_clock::now();
+    using Clock = std::chrono::steady_clock;
+    using Dur   = std::chrono::duration<double>;
+    auto t_start = Clock::now();
 
-    uint64_t sent = 0;
+    uint64_t sent   = 0;
+    uint64_t batch_k = 0;  // batch index for absolute scheduling
     while (sent < N) {
         std::size_t chunk = (N - sent < BATCH) ? static_cast<std::size_t>(N - sent) : BATCH;
+
+        // Throttle: sleep/spin until this batch is due
+        if (rate > 0.0) {
+            double due_sec = static_cast<double>(batch_k) * static_cast<double>(BATCH) / rate;
+            auto due = t_start + std::chrono::duration_cast<Clock::duration>(Dur(due_sec));
+            // Sleep most of the interval, then spin the last bit
+            auto now = Clock::now();
+            if (due > now) {
+                auto sleep_until = due - std::chrono::microseconds(200);
+                if (sleep_until > now)
+                    std::this_thread::sleep_until(sleep_until);
+                while (Clock::now() < due) { /* spin */ }
+            }
+        }
+
         for (std::size_t i = 0; i < chunk; ++i) {
             WireMsg& m = batch[i];
             m.id       = sent + i + 1;
@@ -92,6 +115,7 @@ int main(int argc, char** argv) {
             total -= static_cast<std::size_t>(r);
         }
         sent += chunk;
+        ++batch_k;
     }
 
     auto t_end = std::chrono::steady_clock::now();
