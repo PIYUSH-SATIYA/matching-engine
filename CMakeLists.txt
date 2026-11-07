@@ -42,8 +42,9 @@ add_executable(matching_engine
     src/main.cpp
     src/order_book.cpp
     src/ring_buffer.cpp
+    src/network_epoll.cpp
 )
-target_include_directories(matching_engine PRIVATE include)
+target_include_directories(matching_engine PRIVATE include src)
 target_link_libraries(matching_engine PRIVATE pthread Threads::Threads)
 
 # ---------------------------------------------------------------------------
@@ -117,3 +118,6 @@ add_executable(bench_pipeline
 )
 target_include_directories(bench_pipeline PRIVATE include)
 target_link_libraries(bench_pipeline PRIVATE Threads::Threads)
+
+add_executable(load_client tools/load_client.cpp)
+target_include_directories(load_client PRIVATE include)
