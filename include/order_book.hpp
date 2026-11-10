@@ -38,6 +38,9 @@ public:
     Order* frontAtBestBid();
     Order* frontAtBestAsk();
 
+    // V1 accepts any price. (OrderBookFast only accepts a bounded range.)
+    bool        validPrice(Price) const { return true; }
+
     bool        contains(OrderId id) const { return index_.count(id) != 0; }
     std::size_t orderCount() const { return index_.size(); }
     std::size_t bidLevelCount() const { return bids_.size(); }
