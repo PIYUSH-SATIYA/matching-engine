@@ -31,11 +31,9 @@ inline bool ingestStatsEnabled() {
     return enabled;
 }
 
-inline void noteIngest(NetStats& stats, std::int64_t client_ts_ns) {
+inline void noteIngest(NetStats& stats, std::int64_t client_ts_ns,
+                       std::int64_t now_ns) {
     if (client_ts_ns <= 0) return;
-    const auto now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            std::chrono::steady_clock::now().time_since_epoch())
-                            .count();
     const std::int64_t delta = now_ns - client_ts_ns;
     if (delta <= 0) return;
     const auto d = static_cast<std::uint64_t>(delta);

@@ -32,7 +32,8 @@ NUMERIC = [
     "minflt", "majflt", "nvcsw", "nivcsw", "user_s", "sys_s", "migrations",
     "kernel_ops", "traded_qty", "traded_notional", "net_nvcsw", "net_nivcsw",
     "net_user_s", "net_sys_s", "spsc_yields", "net_ingest_slow",
-    "net_ingest_max_ns",
+    "net_ingest_max_ns", "engine_runq_ns", "net_runq_ns",
+    "arr_p50", "arr_p99", "arr_p999", "svc_p50", "svc_p99", "svc_p999",
 ]
 
 
@@ -61,11 +62,25 @@ def summary_for(rows: list[dict]) -> dict:
     def col(key):
         return [r[key] for r in rows]
 
+    # A run is host-contended when at least one order was already older than
+    # 1 ms by the time the network thread parsed it.  That is a direct
+    # measurement of "the host delayed ingress", not a statistical proxy, so it
+    # is the right thing to condition on when reporting an intrinsic floor.
+    clean = [r for r in rows if r["net_ingest_slow"] == 0]
+
+    def ccol(key):
+        return [r[key] for r in clean]
+
     measured = median(col("measured"))
     cpu_s = median([r["user_s"] + r["sys_s"] for r in rows])
     net_cpu_s = median([r["net_user_s"] + r["net_sys_s"] for r in rows])
     return {
         "runs": len(rows),
+        "clean_runs": len(clean),
+        "p50_clean": median(ccol("p50")),
+        "p999_clean": median(ccol("p999")),
+        "arr_p999_clean": median(ccol("arr_p999")),
+        "svc_p999_clean": median(ccol("svc_p999")),
         "orders": median(col("orders")),
         "measured": measured,
         "throughput": median(col("throughput")),
@@ -89,6 +104,14 @@ def summary_for(rows: list[dict]) -> dict:
         "spsc_yields": median(col("spsc_yields")),
         "ingest_slow": median(col("net_ingest_slow")),
         "ingest_max_ns": median(col("net_ingest_max_ns")),
+        "engine_runq_s": median(col("engine_runq_ns")) / 1e9,
+        "net_runq_s": median(col("net_runq_ns")) / 1e9,
+        "arr_p50": median(col("arr_p50")),
+        "arr_p99": median(col("arr_p99")),
+        "arr_p999": median(col("arr_p999")),
+        "svc_p50": median(col("svc_p50")),
+        "svc_p99": median(col("svc_p99")),
+        "svc_p999": median(col("svc_p999")),
         "traded_qty": median(col("traded_qty")),
         "traded_notional": median(col("traded_notional")),
         "accepted": median(col("accepted")),
@@ -272,7 +295,9 @@ def main() -> int:
               "cpu_us_per_order", "net_cpu_us_per_order", "nvcsw", "nivcsw",
               "net_nvcsw", "net_nivcsw", "kernel_ops", "spsc_yields", "user_s",
               "sys_s", "accepted", "rejected", "invalid", "trades",
-              "traded_qty", "traded_notional", "ingest_slow", "ingest_max_ns"]
+              "traded_qty", "traded_notional", "ingest_slow", "ingest_max_ns",
+              "engine_runq_s", "net_runq_s", "arr_p50", "arr_p99", "arr_p999",
+              "svc_p50", "svc_p99", "svc_p999"]
     with (RESULTS / "summary.csv").open("w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=fields)
         writer.writeheader()
@@ -282,8 +307,10 @@ def main() -> int:
             row["p999_over_p50"] = (s["p999"] / s["p50"]) if s["p50"] else 0.0
             writer.writerow({k: row[k] for k in fields})
 
-    latency = [(c, s) for (c, k), s in summaries.items() if k == "latency"]
-    throughput = [(c, s) for (c, k), s in summaries.items() if k == "throughput"]
+    latency = [(c, summaries[f"{c}|{k}"]) for (c, k) in groups if k == "latency"]
+    throughput = [(c, summaries[f"{c}|{k}"]) for (c, k) in groups if k == "throughput"]
+    main_latency = [(c, s) for c, s in latency if not c.startswith("probe-")]
+    probe_latency = [(c, s) for c, s in latency if c.startswith("probe-")]
 
     # ---- outlier flags -----------------------------------------------------
     flags = []
@@ -314,13 +341,57 @@ def main() -> int:
     md.append("## Latency runs (200k orders/s, 10k warmup)")
     md.append("")
     md.append(md_table(
-        ["config", "runs", "p50", "p90", "p99", "p99.9", "p99.9 range", "max",
-         "p99.9/p50", "kernel ops/run"],
-        [[short_name(c), s["runs"], fmt_ns(s["p50"]), fmt_ns(s["p90"]),
-          fmt_ns(s["p99"]), fmt_ns(s["p999"]),
+        ["config", "runs", "clean runs", "p50", "p90", "p99", "p99.9",
+         "p99.9 (clean)", "p99.9 range", "max", "kernel ops/run",
+         "engine run-queue wait", "net run-queue wait"],
+        [[short_name(c), s["runs"], s["clean_runs"], fmt_ns(s["p50"]),
+          fmt_ns(s["p90"]), fmt_ns(s["p99"]), fmt_ns(s["p999"]),
+          fmt_ns(s["p999_clean"]) if s["clean_runs"] else "–",
           f'{fmt_ns(s["p999_min"])}–{fmt_ns(s["p999_max"])}',
-          fmt_ns(s["max"]), f'{s["p999"] / s["p50"]:.0f}×' if s["p50"] else "-",
-          f'{s["kernel_ops"]:.0f}'] for c, s in sorted(latency)]))
+          fmt_ns(s["max"]), f'{s["kernel_ops"]:.0f}',
+          f'{s["engine_runq_s"] * 1e3:.2f} ms',
+          f'{s["net_runq_s"] * 1e3:.2f} ms'] for c, s in sorted(main_latency)]))
+    md.append("")
+    md.append("`clean runs` counts repetitions in which **no** order was already "
+              "more than 1 ms old when the network thread parsed it. A run with "
+              "zero clean runs could not be measured on this host: the desktop "
+              "session delayed ingress, and that is an ingress/scheduling result, "
+              "not a pipeline result.")
+    md.append("")
+    md.append("## Latency decomposition (same runs, medians)")
+    md.append("")
+    md.append("Total = arrival (client send → network thread parse) + service "
+              "(parse → engine completion). The share column is "
+              "arrival p99.9 / total p99.9.")
+    md.append("")
+    md.append(md_table(
+        ["config", "total p50", "arrival p50", "service p50", "total p99.9",
+         "arrival p99.9", "service p99.9", "arrival share of p99.9"],
+        [[short_name(c), fmt_ns(s["p50"]), fmt_ns(s["arr_p50"]),
+          fmt_ns(s["svc_p50"]), fmt_ns(s["p999"]), fmt_ns(s["arr_p999"]),
+          fmt_ns(s["svc_p999"]),
+          f'{100.0 * s["arr_p999"] / s["p999"]:.0f}%' if s["p999"] else "-"]
+         for c, s in sorted(main_latency)]))
+    md.append("")
+    md.append("## Clean-run view")
+    md.append("")
+    md.append("Medians computed only over repetitions in which ingress was not "
+              "delayed by the host (no order older than 1 ms at parse). This is "
+              "the fairest side-by-side the host allows; configs with zero clean "
+              "runs are marked `–` and must not be compared by this table.")
+    md.append("")
+    md.append(md_table(
+        ["config", "clean runs", "p50", "p99.9", "arrival p99.9",
+         "service p99.9", "arrival share"],
+        [[short_name(c),
+          f'{s["clean_runs"]}/{s["runs"]}',
+          fmt_ns(s["p50_clean"]) if s["clean_runs"] else "–",
+          fmt_ns(s["p999_clean"]) if s["clean_runs"] else "–",
+          fmt_ns(s["arr_p999_clean"]) if s["clean_runs"] else "–",
+          fmt_ns(s["svc_p999_clean"]) if s["clean_runs"] else "–",
+          (f'{100.0 * s["arr_p999_clean"] / s["p999_clean"]:.0f}%'
+           if s["clean_runs"] and s["p999_clean"] else "–")]
+         for c, s in sorted(main_latency)]))
     md.append("")
     md.append("## Throughput runs (unthrottled)")
     md.append("")
@@ -338,33 +409,60 @@ def main() -> int:
     md.append("")
     md.append("Queue (fixed: fast-slab, epoll, pinned engine/network/client):")
     md.append("")
+    def clean_ns(s):
+        return fmt_ns(s["p999_clean"]) if s["clean_runs"] else "–"
+
     qrows = []
     for c, s in latency:
         if c.startswith("q-") and "sched-pin" in c and "net-epoll" in c:
-            qrows.append([short_name(c), fmt_ns(s["p50"]), fmt_ns(s["p99"]),
-                          fmt_ns(s["p999"]), f'{s["p999"] / s["p50"]:.0f}×'])
-    md.append(md_table(["config", "p50", "p99", "p99.9", "p99.9/p50"], qrows))
+            qrows.append([short_name(c), f'{s["clean_runs"]}/{s["runs"]}',
+                          fmt_ns(s["p50"]), fmt_ns(s["p99"]), fmt_ns(s["p999"]),
+                          clean_ns(s)])
+    md.append(md_table(["config", "clean runs", "p50", "p99", "p99.9",
+                        "p99.9 (clean)"], qrows))
     md.append("")
     md.append("Allocator (fixed: spsc, epoll, pinned):")
     md.append("")
-    arows = [[short_name(c), fmt_ns(s["p50"]), fmt_ns(s["p99"]), fmt_ns(s["p999"]),
-              fmt_rate(s["throughput"])] for c, s in latency if c.startswith("alloc-")]
-    md.append(md_table(["config", "p50", "p99", "p99.9", "latency-run rate"], arows))
+    arows = [[short_name(c), f'{s["clean_runs"]}/{s["runs"]}', fmt_ns(s["p50"]),
+              fmt_ns(s["p99"]), fmt_ns(s["p999"]), clean_ns(s)]
+             for c, s in latency if c.startswith("alloc-")]
+    md.append(md_table(["config", "clean runs", "p50", "p99", "p99.9",
+                        "p99.9 (clean)"], arows))
     md.append("")
     md.append("Scheduling (fixed: spsc, fast-slab, epoll):")
     md.append("")
-    srows = [[short_name(c), fmt_ns(s["p50"]), fmt_ns(s["p99"]), fmt_ns(s["p999"]),
-              f'{s["nivcsw"]:.0f}', f'{s["nvcsw"]:.0f}']
+    srows = [[short_name(c), f'{s["clean_runs"]}/{s["runs"]}', fmt_ns(s["p50"]),
+              fmt_ns(s["p99"]), fmt_ns(s["p999"]), clean_ns(s),
+              f'{s["engine_runq_s"] * 1e3:.1f} ms', f'{s["nivcsw"]:.0f}']
              for c, s in latency
              if c.startswith("q-spsc") and "net-epoll" in c]
-    md.append(md_table(["config", "p50", "p99", "p99.9", "involuntary switches", "voluntary switches"], srows))
+    md.append(md_table(["config", "clean runs", "p50", "p99", "p99.9",
+                        "p99.9 (clean)", "engine run-queue wait",
+                        "involuntary switches"], srows))
     md.append("")
     md.append("Network (fixed: spsc, fast-slab, pinned):")
     md.append("")
-    nrows = [[short_name(c), fmt_ns(s["p50"]), fmt_ns(s["p99"]), fmt_ns(s["p999"]),
-              f'{s["kernel_ops"]:.0f}']
+    nrows = [[short_name(c), f'{s["clean_runs"]}/{s["runs"]}', fmt_ns(s["p50"]),
+              fmt_ns(s["p99"]), fmt_ns(s["p999"]), clean_ns(s),
+              f'{s["kernel_ops"]:.0f}', f'{s["net_runq_s"] * 1e3:.1f} ms']
              for c, s in latency if c.startswith("q-spsc") and "sched-pin" in c]
-    md.append(md_table(["config", "p50", "p99", "p99.9", "network kernel ops/run"], nrows))
+    md.append(md_table(["config", "clean runs", "p50", "p99", "p99.9",
+                        "p99.9 (clean)", "kernel ops/run",
+                        "net run-queue wait"], nrows))
+    md.append("")
+    md.append("## Mechanism probes: where the tail is spent")
+    md.append("")
+    md.append("`net_ingest_slow` counts orders whose client timestamp was already older "
+              "than 1 ms when the network thread parsed them — i.e. the delay happened "
+              "before the engine could see the order. Values are medians across runs.")
+    md.append("")
+    md.append(md_table(
+        ["config", "p50", "p99", "p99.9", "orders >1 ms before parse",
+         "share of orders", "max arrival delay"],
+        [[short_name(c), fmt_ns(s["p50"]), fmt_ns(s["p99"]), fmt_ns(s["p999"]),
+          f'{s["ingest_slow"]:.0f} / {s["measured"]:.0f}',
+          f'{100.0 * s["ingest_slow"] / s["measured"]:.2f}%' if s["measured"] else "-",
+          fmt_ns(s["ingest_max_ns"])] for c, s in sorted(probe_latency)]))
     md.append("")
     md.append("## Correctness checksums")
     md.append("")
@@ -375,6 +473,25 @@ def main() -> int:
         md.append(f"- `{kind}`: {len(tuples)} distinct checksum(s) across all configs.")
         for t in sorted(tuples):
             md.append(f"  - orders={t[0]} warmup={t[1]} trades={t[2]} qty={t[3]} notional={t[4]}")
+    md.append("")
+    md.append("## Host-contended runs (ingress delayed by the host)")
+    md.append("")
+    md.append("These are not pipeline measurements: at least one order was already "
+              ">1 ms old when the network thread parsed it, so the delay happened "
+              "before the engine could run. They are listed rather than deleted so "
+              "the matrix stays auditable.")
+    md.append("")
+    contended = [(r["config"], r["run"], r["net_ingest_slow"],
+                  r["net_ingest_max_ns"], r["net_runq_ns"])
+                 for r in rows
+                 if r["kind"] == "latency" and r["net_ingest_slow"] > 0]
+    if contended:
+        for config, run, slow, mx, runq in sorted(contended):
+            md.append(f"- `{config}` run {run}: {slow:.0f} orders >1 ms, "
+                      f"max arrival {fmt_ns(mx)}, net run-queue wait "
+                      f"{runq / 1e6:.1f} ms")
+    else:
+        md.append("- none")
     md.append("")
     md.append("## Flagged runs (p99.9 > 1.2× config median)")
     md.append("")
@@ -412,7 +529,7 @@ def main() -> int:
     svg_hbars("Throughput by configuration (median)", thr_items,
               PLOTS / "bar-throughput.svg", fmt_rate,
               "Unthrottled client, 2M orders, fast-slab unless labelled otherwise.")
-    lat_items = [(short_name(c), s["p999"]) for c, s in latency]
+    lat_items = [(short_name(c), s["p999"]) for c, s in main_latency]
     svg_hbars("p99.9 latency by configuration (median)", lat_items,
               PLOTS / "bar-p999.svg", fmt_ns,
               "Open-loop 200k orders/s, 1.01M orders, client-send to engine-complete.")

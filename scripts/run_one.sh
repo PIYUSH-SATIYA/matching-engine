@@ -63,6 +63,13 @@ if [ -n "$SAMPLES" ] && [ "$SAMPLES" != "-" ]; then
   SERVER_ARGS+=(--samples "$SAMPLES")
 fi
 
+# Ingress attribution (two clock reads per parsed order on the network thread,
+# ~20 ns each) is on for latency runs: without it the report cannot separate
+# "the order arrived late" from "the engine got scheduled late".
+if [ "$KIND" = "latency" ]; then
+  export ME_INGEST_STATS="${ME_INGEST_STATS:-1}"
+fi
+
 ROWS_BEFORE=0
 if [ -f "$CSV" ]; then
   ROWS_BEFORE=$(awk -F, -v c="$CONFIG" -v r="$RUN" '$1==c && $2==r {n++} END{print n+0}' "$CSV")
@@ -107,4 +114,5 @@ if [ "$ROWS_AFTER" -le "$ROWS_BEFORE" ]; then
   exit 1
 fi
 
-awk -F, -v c="$CONFIG" -v r="$RUN" '$1==c && $2==r {printf "[%s run %s] throughput=%s/s p50=%s p99=%s p99.9=%s trades=%s wall=%.2fs\n",$1,$2,$12,$13,$15,$16,$8,'"$end"' - '"$start"'}' "$CSV" | tail -1
+LOAD1=$(cut -d' ' -f1 /proc/loadavg)
+awk -F, -v c="$CONFIG" -v r="$RUN" -v load1="$LOAD1" '$1==c && $2==r {printf "[%s run %s] throughput=%s/s p50=%s p99=%s p99.9=%s trades=%s wall=%.2fs load1=%s runq=%sms\n",$1,$2,$12,$13,$15,$16,$8,'"$end"' - '"$start"',$35/1e6,load1}' "$CSV" | tail -1

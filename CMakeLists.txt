@@ -2,6 +2,10 @@
 cmake_minimum_required(VERSION 3.16)
 project(matching_engine LANGUAGES CXX)
 
+# -Wformat=2 makes a header/format-string mismatch in the CSV writer a
+# compile-time error instead of a silently truncated column (which is exactly
+# how svc_p999 went missing once).
+add_compile_options(-Wall -Wextra -Wformat=2)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)

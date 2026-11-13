@@ -57,6 +57,13 @@ OUT="$RESULTS/env.txt"
     fi
   done
   echo
+  echo "## Host load at capture"
+  echo "loadavg=$(cat /proc/loadavg)"
+  echo "runnable_snapshot=1s vmstat us/sy/id columns below"
+  vmstat 1 3 2>/dev/null | tail -3 || true
+  echo "-- top CPU consumers (this is a desktop session, not a dedicated test box) --"
+  ps -eo pid,pcpu,stat,comm --sort=-pcpu | head -8
+  echo
   echo "## Pin map"
   echo "engine_cpu=${ME_CPU_ENGINE:-2}"
   echo "net_cpu=${ME_CPU_NET:-4} (floating unless ME_PIN_NET=1)"

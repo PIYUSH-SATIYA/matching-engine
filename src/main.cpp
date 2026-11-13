@@ -58,6 +58,10 @@ struct EngineStats {
     std::uint64_t minflt = 0;
     std::uint64_t majflt = 0;
     std::uint64_t migrations = 0;
+    // Cumulative time this thread spent runnable but waiting on a run queue.
+    // /proc/thread-self/schedstat reports it directly, which turns "how much
+    // of the tail is the scheduler?" into a number instead of a guess.
+    std::uint64_t runq_ns = 0;
     double user_s = 0;
     double sys_s = 0;
 };
@@ -66,10 +70,26 @@ static double timevalSeconds(const timeval& tv) {
     return static_cast<double>(tv.tv_sec) + static_cast<double>(tv.tv_usec) / 1e6;
 }
 
+// Second field of /proc/thread-self/schedstat: ns spent waiting for a CPU.
+static std::uint64_t threadRunqueueNs() {
+#ifdef __linux__
+    std::FILE* f = std::fopen("/proc/thread-self/schedstat", "r");
+    if (!f) return 0;
+    unsigned long long on_cpu = 0, runq = 0, slices = 0;
+    const int n = std::fscanf(f, "%llu %llu %llu", &on_cpu, &runq, &slices);
+    std::fclose(f);
+    return (n == 3) ? static_cast<std::uint64_t>(runq) : 0;
+#else
+    return 0;
+#endif
+}
+
 static void writeStats(const Options& opt, std::uint64_t seen,
                        const CountingSink& counting, const NetStats& net,
                        std::uint64_t measured, double duration_s,
                        double throughput, const std::vector<std::uint64_t>& sorted,
+                       const std::vector<std::uint64_t>& arr_sorted,
+                       const std::vector<std::uint64_t>& svc_sorted,
                        const EngineStats& es, const EngineStats& net_es) {
     if (!opt.stats_path) return;
     FILE* f = std::fopen(opt.stats_path, "a");
@@ -84,7 +104,8 @@ static void writeStats(const Options& opt, std::uint64_t seen,
                      "max,minflt,majflt,nvcsw,nivcsw,user_s,sys_s,migrations,"
                      "kernel_ops,traded_qty,traded_notional,net_nvcsw,net_nivcsw,"
                      "net_user_s,net_sys_s,spsc_yields,net_ingest_slow,"
-                     "net_ingest_max_ns\n");
+                     "net_ingest_max_ns,engine_runq_ns,net_runq_ns,"
+                     "arr_p50,arr_p99,arr_p999,svc_p50,svc_p99,svc_p999\n");
     }
     const auto p = [&](double q) {
         return static_cast<unsigned long long>(
@@ -102,7 +123,7 @@ static void writeStats(const Options& opt, std::uint64_t seen,
         f,
         "%s,%d,%s,%llu,%zu,%llu,%llu,%llu,%llu,%llu,%.6f,%.0f,%llu,%llu,%llu,"
         "%llu,%llu,%llu,%llu,%llu,%llu,%.6f,%.6f,%llu,%llu,%llu,%llu,%llu,%llu,"
-        "%.6f,%.6f,%llu,%llu,%llu\n",
+        "%.6f,%.6f,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu\n",
         opt.config.c_str(), opt.run, opt.kind.c_str(),
         static_cast<unsigned long long>(seen), opt.warmup,
         static_cast<unsigned long long>(measured),
@@ -124,7 +145,21 @@ static void writeStats(const Options& opt, std::uint64_t seen,
         static_cast<unsigned long long>(net_es.nivcsw), net_es.user_s,
         net_es.sys_s, static_cast<unsigned long long>(spsc_yields),
         static_cast<unsigned long long>(net.ingest_slow),
-        static_cast<unsigned long long>(net.ingest_max_ns));
+        static_cast<unsigned long long>(net.ingest_max_ns),
+        static_cast<unsigned long long>(es.runq_ns),
+        static_cast<unsigned long long>(net_es.runq_ns),
+        static_cast<unsigned long long>(
+            LatencyRecorder::percentile(arr_sorted, 0.50)),
+        static_cast<unsigned long long>(
+            LatencyRecorder::percentile(arr_sorted, 0.99)),
+        static_cast<unsigned long long>(
+            LatencyRecorder::percentile(arr_sorted, 0.999)),
+        static_cast<unsigned long long>(
+            LatencyRecorder::percentile(svc_sorted, 0.50)),
+        static_cast<unsigned long long>(
+            LatencyRecorder::percentile(svc_sorted, 0.99)),
+        static_cast<unsigned long long>(
+            LatencyRecorder::percentile(svc_sorted, 0.999)));
     std::fclose(f);
 }
 
@@ -160,6 +195,10 @@ int runApp(const Options& opt) {
     if (opt.log_path) tlog = std::make_unique<TradeLogSink>(1u << 20);
 
     LatencyRecorder latency(4'000'000, opt.warmup);
+    // Same samples split into their two components: arrival (client send ->
+    // network thread parse) and service (parse -> engine completion).
+    LatencyRecorder arrival(4'000'000, opt.warmup);
+    LatencyRecorder service(4'000'000, opt.warmup);
     std::atomic<bool> rt_failed{false};
     std::uint64_t seen = 0;
     std::uint64_t measured = 0;
@@ -181,6 +220,7 @@ int runApp(const Options& opt) {
 
         struct rusage base {};
         bool have_base = false;
+        std::uint64_t runq_base = 0;
         auto loop = [&](auto& engine) {
             int last_cpu = -1;
             bool first = true;
@@ -191,6 +231,7 @@ int runApp(const Options& opt) {
                     // Baseline after the producer has started: excludes the
                     // engine's startup idle-spin from per-order CPU accounting.
                     getrusage(RUSAGE_THREAD, &base);
+                    runq_base = threadRunqueueNs();
                     have_base = true;
                     first = false;
                 }
@@ -211,6 +252,20 @@ int runApp(const Options& opt) {
                 }
                 ++seen;
                 latency.record(static_cast<std::uint64_t>(ns));
+                if (o.enqueue_time != Timestamp{}) {
+                    std::int64_t arr = std::chrono::duration_cast<
+                                           std::chrono::nanoseconds>(
+                                           o.enqueue_time - t0)
+                                           .count();
+                    std::int64_t svc = std::chrono::duration_cast<
+                                           std::chrono::nanoseconds>(t1 -
+                                                                     o.enqueue_time)
+                                           .count();
+                    if (arr < 0) arr = 0;
+                    if (svc < 0) svc = 0;
+                    arrival.record(static_cast<std::uint64_t>(arr));
+                    service.record(static_cast<std::uint64_t>(svc));
+                }
 
                 if (opt.count_migrations && (seen & 63u) == 0) {
 #ifdef __linux__
@@ -239,6 +294,8 @@ int runApp(const Options& opt) {
             es.majflt = static_cast<std::uint64_t>(ru.ru_majflt - base.ru_majflt);
             es.user_s = timevalSeconds(ru.ru_utime) - timevalSeconds(base.ru_utime);
             es.sys_s = timevalSeconds(ru.ru_stime) - timevalSeconds(base.ru_stime);
+            const std::uint64_t runq = threadRunqueueNs();
+            es.runq_ns = (runq > runq_base) ? runq - runq_base : 0;
         }
     });
 
@@ -246,6 +303,7 @@ int runApp(const Options& opt) {
         if (opt.sched != "default" && opt.cpu_net >= 0) pinThisThread(opt.cpu_net);
         struct rusage nbase {};
         getrusage(RUSAGE_THREAD, &nbase);
+        const std::uint64_t nrunq_base = threadRunqueueNs();
         server->run(g_stop);
         struct rusage nru {};
         if (getrusage(RUSAGE_THREAD, &nru) == 0) {
@@ -255,6 +313,8 @@ int runApp(const Options& opt) {
                 timevalSeconds(nru.ru_utime) - timevalSeconds(nbase.ru_utime);
             net_es.sys_s =
                 timevalSeconds(nru.ru_stime) - timevalSeconds(nbase.ru_stime);
+            const std::uint64_t nrunq = threadRunqueueNs();
+            net_es.runq_ns = (nrunq > nrunq_base) ? nrunq - nrunq_base : 0;
         }
         // The engine thread exits on rt_failed without consuming, so only
         // enqueue the sentinel if the consumer is still alive.
@@ -289,8 +349,10 @@ int runApp(const Options& opt) {
                      latency.dropped());
     }
 
+    const auto arr_sorted = arrival.sorted();
+    const auto svc_sorted = service.sorted();
     writeStats(opt, seen, counting, net, measured, duration_s, throughput, sorted,
-               es, net_es);
+               arr_sorted, svc_sorted, es, net_es);
 
     std::printf(
         "\n=== %s run=%d ===\n"
@@ -299,8 +361,10 @@ int runApp(const Options& opt) {
         "throughput=%.0f/s duration=%.6fs\n"
         "p50=%llu p90=%llu p99=%llu p99.9=%llu max=%llu ns\n"
         "minflt=%llu majflt=%llu nvcsw=%llu nivcsw=%llu user=%.3fs sys=%.3fs "
-        "migrations=%llu kernel_ops=%llu\n"
-        "net: nvcsw=%llu nivcsw=%llu user=%.3fs sys=%.3fs\n",
+        "migrations=%llu kernel_ops=%llu runq=%.3fms\n"
+        "net: nvcsw=%llu nivcsw=%llu user=%.3fs sys=%.3fs runq=%.3fms\n"
+        "split: arrival p50=%llu p99=%llu p99.9=%llu | service p50=%llu "
+        "p99=%llu p99.9=%llu ns\n",
         opt.config.c_str(), opt.run,
         static_cast<unsigned long long>(seen), opt.warmup,
         static_cast<unsigned long long>(measured),
@@ -327,9 +391,16 @@ int runApp(const Options& opt) {
             (opt.net == "uring")
                 ? net.submits + net.completions + net.accepts
                 : net.epoll_waits + net.recv_calls + net.accepts),
+        static_cast<double>(es.runq_ns) / 1e6,
         static_cast<unsigned long long>(net_es.nvcsw),
         static_cast<unsigned long long>(net_es.nivcsw), net_es.user_s,
-        net_es.sys_s);
+        net_es.sys_s, static_cast<double>(net_es.runq_ns) / 1e6,
+        static_cast<unsigned long long>(LatencyRecorder::percentile(arr_sorted, 0.50)),
+        static_cast<unsigned long long>(LatencyRecorder::percentile(arr_sorted, 0.99)),
+        static_cast<unsigned long long>(LatencyRecorder::percentile(arr_sorted, 0.999)),
+        static_cast<unsigned long long>(LatencyRecorder::percentile(svc_sorted, 0.50)),
+        static_cast<unsigned long long>(LatencyRecorder::percentile(svc_sorted, 0.99)),
+        static_cast<unsigned long long>(LatencyRecorder::percentile(svc_sorted, 0.999)));
 
     if (ingestStatsEnabled()) {
         std::printf("ingest: orders_older_than_1ms=%llu max=%llu ns\n",

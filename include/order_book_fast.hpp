@@ -157,6 +157,29 @@ class OrderBookFast {
     return true;
   }
 
+  // With HeapAllocator the book owns each resting node, so destroying the book
+  // must release them; otherwise every order still resting leaks one aligned
+  // allocation.  With the slab the block is owned by SlabAllocator and freed
+  // with it, so there is nothing to walk.
+  ~OrderBookFast() {
+    if constexpr (UseHeap) {
+      Level* sides[2] = {bids_.data(), asks_.data()};
+      for (Level* levels : sides) {
+        for (std::size_t i = 0; i < NumLevels; ++i) {
+          Node* n = levels[i].head;
+          while (n != nullptr) {
+            Node* next = n->next;
+            n->~Node();
+            slab_->deallocate(n);
+            n = next;
+          }
+          levels[i].head = nullptr;
+          levels[i].tail = nullptr;
+        }
+      }
+    }
+  }
+
  private:
   static constexpr std::size_t kNone = static_cast<std::size_t>(-1);
 

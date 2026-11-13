@@ -28,7 +28,15 @@ struct Order {
   Price price;
   Quantity quantity;
 
+  // Stamped by the client when the order is sent (CLOCK_MONOTONIC). Latency is
+  // measured from here, so it includes send, loopback TCP and ingress.
   Timestamp submit_time;
+
+  // Stamped by the network thread when it has parsed the message and is about
+  // to enqueue it. submit_time -> enqueue_time is the arrival component;
+  // enqueue_time -> completion is the queue + matching component. Keeping both
+  // turns "where is the tail?" into a measurement instead of an argument.
+  Timestamp enqueue_time{};
 };
 
 struct Trade {

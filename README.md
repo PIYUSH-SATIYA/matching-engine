@@ -21,7 +21,7 @@ scheduling, I/O), then measure the latency distribution.
         │ pop()
         ▼
  engine thread: MatchingEngine<Book, Sink>
-        ├─ OrderBookFast: direct-indexed price array + intrustive levels
+        ├─ OrderBookFast: direct-indexed price array + intrusive levels
         │                 + open-addressing id hash + slab (or heap) nodes
         └─ OrderBook (V1): std::map + std::list reference implementation
 ```
@@ -94,6 +94,7 @@ Useful overrides:
 | `ME_CPU_CLIENT` | `6` | client core |
 | `ME_PIN_NET` | `0` | set to `1` to also pin the network thread |
 | `ME_SEED` | `42` | workload seed |
+| `ME_INGEST_STATS` | `1` for latency runs | count orders older than 1 ms at parse time |
 
 `scripts/run_matrix.sh --force` discards previous results. Without `--force`, completed
 runs are skipped, so an interrupted matrix resumes.
@@ -126,13 +127,27 @@ described in `results/env.txt`. Important limitations:
   evidence comes from in-process counters: `getrusage(RUSAGE_THREAD)` for context
   switches and CPU time, `sched_getcpu()` for migrations, and per-backend syscall /
   submission / completion counters.
-- SMT is enabled and `isolcpus` is not used. The engine core is pinned, but the host
-  can still schedule other work there; the remaining p99.9 spikes correlate with
-  involuntary context switches of the engine thread.
+- SMT is enabled and `isolcpus` is not used, so a pinned thread still shares its core
+  with whatever else the host schedules there. This is the dominant caveat: the host
+  is a desktop session, not a dedicated test box (`results/env.txt` records the load
+  and the top CPU consumers at capture time).
+- The tail is attributed with in-process instrumentation rather than guesswork. Every
+  order is stamped twice inside the server: `enqueue_time` on the network thread after
+  parsing, and completion on the engine thread. The CSV therefore contains both the
+  arrival component (client send → parse) and the service component (parse → matched),
+  plus cumulative run-queue wait for both threads from
+  `/proc/thread-self/schedstat` (`engine_runq_ns`, `net_runq_ns`).
 - The network thread is left floating by default. Pinning it to one core made it
-  sensitive to unrelated host load and increased the tail.
+  sensitive to unrelated host load and increased the tail (measurably: p99.9 158 µs
+  → 831 µs with 0.07 % of orders arriving >1 ms late).
 - All networking is loopback. The measurements quantify kernel/user-boundary and
   scheduling effects; they are not a NIC or cross-host benchmark.
+- `results/summary.md` separates *clean* runs from host-contended runs. A run is
+  contended when at least one order was already >1 ms old at parse time; those runs
+  are listed individually rather than deleted. `results/host-isolation.txt` records a
+  one-off controlled check showing the same configuration move from 2.40 ms to
+  142 µs p99.9 when the host load was confined, which is what justifies treating the
+  outliers as ingress delay rather than pipeline behaviour.
 
 ## Layout
 
