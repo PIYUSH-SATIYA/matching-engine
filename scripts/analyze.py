@@ -31,7 +31,8 @@ NUMERIC = [
     "invalid", "duration_s", "throughput", "p50", "p90", "p99", "p999", "max",
     "minflt", "majflt", "nvcsw", "nivcsw", "user_s", "sys_s", "migrations",
     "kernel_ops", "traded_qty", "traded_notional", "net_nvcsw", "net_nivcsw",
-    "net_user_s", "net_sys_s", "spsc_yields",
+    "net_user_s", "net_sys_s", "spsc_yields", "net_ingest_slow",
+    "net_ingest_max_ns",
 ]
 
 
@@ -86,6 +87,8 @@ def summary_for(rows: list[dict]) -> dict:
         "net_nivcsw": median(col("net_nivcsw")),
         "net_cpu_us_per_order": (net_cpu_s / measured * 1e6) if measured else 0.0,
         "spsc_yields": median(col("spsc_yields")),
+        "ingest_slow": median(col("net_ingest_slow")),
+        "ingest_max_ns": median(col("net_ingest_max_ns")),
         "traded_qty": median(col("traded_qty")),
         "traded_notional": median(col("traded_notional")),
         "accepted": median(col("accepted")),
@@ -269,7 +272,7 @@ def main() -> int:
               "cpu_us_per_order", "net_cpu_us_per_order", "nvcsw", "nivcsw",
               "net_nvcsw", "net_nivcsw", "kernel_ops", "spsc_yields", "user_s",
               "sys_s", "accepted", "rejected", "invalid", "trades",
-              "traded_qty", "traded_notional"]
+              "traded_qty", "traded_notional", "ingest_slow", "ingest_max_ns"]
     with (RESULTS / "summary.csv").open("w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=fields)
         writer.writeheader()

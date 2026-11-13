@@ -83,7 +83,8 @@ static void writeStats(const Options& opt, std::uint64_t seen,
                      "rejected,invalid,duration_s,throughput,p50,p90,p99,p999,"
                      "max,minflt,majflt,nvcsw,nivcsw,user_s,sys_s,migrations,"
                      "kernel_ops,traded_qty,traded_notional,net_nvcsw,net_nivcsw,"
-                     "net_user_s,net_sys_s,spsc_yields\n");
+                     "net_user_s,net_sys_s,spsc_yields,net_ingest_slow,"
+                     "net_ingest_max_ns\n");
     }
     const auto p = [&](double q) {
         return static_cast<unsigned long long>(
@@ -101,7 +102,7 @@ static void writeStats(const Options& opt, std::uint64_t seen,
         f,
         "%s,%d,%s,%llu,%zu,%llu,%llu,%llu,%llu,%llu,%.6f,%.0f,%llu,%llu,%llu,"
         "%llu,%llu,%llu,%llu,%llu,%llu,%.6f,%.6f,%llu,%llu,%llu,%llu,%llu,%llu,"
-        "%.6f,%.6f,%llu\n",
+        "%.6f,%.6f,%llu,%llu,%llu\n",
         opt.config.c_str(), opt.run, opt.kind.c_str(),
         static_cast<unsigned long long>(seen), opt.warmup,
         static_cast<unsigned long long>(measured),
@@ -121,7 +122,9 @@ static void writeStats(const Options& opt, std::uint64_t seen,
         static_cast<unsigned long long>(counting.traded_notional),
         static_cast<unsigned long long>(net_es.nvcsw),
         static_cast<unsigned long long>(net_es.nivcsw), net_es.user_s,
-        net_es.sys_s, static_cast<unsigned long long>(spsc_yields));
+        net_es.sys_s, static_cast<unsigned long long>(spsc_yields),
+        static_cast<unsigned long long>(net.ingest_slow),
+        static_cast<unsigned long long>(net.ingest_max_ns));
     std::fclose(f);
 }
 
@@ -327,6 +330,12 @@ int runApp(const Options& opt) {
         static_cast<unsigned long long>(net_es.nvcsw),
         static_cast<unsigned long long>(net_es.nivcsw), net_es.user_s,
         net_es.sys_s);
+
+    if (ingestStatsEnabled()) {
+        std::printf("ingest: orders_older_than_1ms=%llu max=%llu ns\n",
+                    static_cast<unsigned long long>(net.ingest_slow),
+                    static_cast<unsigned long long>(net.ingest_max_ns));
+    }
 
     if (opt.samples_path && !latency.writeSamples(opt.samples_path)) {
         std::fprintf(stderr, "cannot write samples to %s\n", opt.samples_path);

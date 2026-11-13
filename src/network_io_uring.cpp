@@ -205,6 +205,8 @@ class UringServer final : public INetworkServer {
         c.used += static_cast<std::size_t>(res);
         c.used = wire::parse(c.buf, c.used, stats_.invalid,
                              [&](const wire::Msg& m) {
+                                 if (ingestStatsEnabled())
+                                     noteIngest(stats_, m.client_ts_ns);
                                  Order o = wire::toOrder(m);
                                  if (m.client_ts_ns == 0)
                                      o.submit_time = std::chrono::steady_clock::now();

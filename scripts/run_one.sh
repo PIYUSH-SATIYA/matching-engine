@@ -73,8 +73,13 @@ timeout 180 "$BIN/matching_engine" "${SERVER_ARGS[@]}" >"$LOG" 2>&1 &
 SERVER_PID=$!
 
 set +e
-timeout 180 taskset -c "$CPU_CLIENT" "$BIN/load_client" \
-  127.0.0.1 "$PORT" "$ORDERS" "$SEED" "$RATE" >"$CLIENT_LOG" 2>&1
+if [ "${ME_PIN_CLIENT:-1}" = "1" ]; then
+  timeout 180 taskset -c "$CPU_CLIENT" "$BIN/load_client" \
+    127.0.0.1 "$PORT" "$ORDERS" "$SEED" "$RATE" >"$CLIENT_LOG" 2>&1
+else
+  timeout 180 "$BIN/load_client" \
+    127.0.0.1 "$PORT" "$ORDERS" "$SEED" "$RATE" >"$CLIENT_LOG" 2>&1
+fi
 CLIENT_RC=$?
 wait "$SERVER_PID"
 SERVER_RC=$?

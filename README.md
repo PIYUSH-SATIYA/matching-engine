@@ -74,6 +74,8 @@ one CSV row per run.
 scripts/env.sh                 # results/env.txt
 scripts/run_matrix.sh          # 2 queues × 2 scheduling × 2 networks, 10 latency runs + 5 throughput runs each
 scripts/run_experiments.sh     # allocator isolation (slab/heap/V1) + SCHED_FIFO probe
+scripts/run_components.sh      # no-network floors: single-threaded book, queue+engine pipeline
+scripts/run_probe.sh           # ingress attribution + client/network pinning probes
 scripts/analyze.py             # results/summary.csv, summary.md, analysis.json, plots/*.svg
 ```
 

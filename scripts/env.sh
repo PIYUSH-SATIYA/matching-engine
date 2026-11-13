@@ -12,7 +12,7 @@ OUT="$RESULTS/env.txt"
   date -Is
   echo "git_branch=$(git -C "$ROOT" branch --show-current)"
   echo "git_commit=$(git -C "$ROOT" rev-parse HEAD)"
-  echo "git_dirty=$(git -C "$ROOT" status --porcelain | tr '\n' ';')"
+  echo "git_dirty=$(git -C "$ROOT" status --porcelain -- . ':!results' ':!build*' | tr '\n' ';')"
   echo "build_type=Release"
   echo
   echo "## Host"
