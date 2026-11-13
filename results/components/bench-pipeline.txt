@@ -1,0 +1,36 @@
+# bench_pipeline orders=1010000 rate=200000 seed=42 reps=3
+# producer cpu=6 engine cpu=2
+# 2026-11-14T00:21:14+05:30
+--- rep 1 ---
+orders=1010000  paced rate=200000/s  cpus: producer=6 engine=2  (hw threads: 12)
+
+queue  book | throughput |   p50 ns   p99 ns p99.9 ns    max ns   achvd k/s
+-----------+------------+--------------------------------------------------
+mutex  V1   |     2.77 M/s |     1889     2797  8233068  13031218         200
+mutex  V3   |     3.02 M/s |     1824     2285    21430   1083050         200
+spsc   V1   |     5.16 M/s |      363      982  8375294  13120501         200
+spsc   V3   |     6.25 M/s |      359      587     5739     40114         200
+
+result check: trades=789497 traded_qty=20135763  all 4 configs identical: YES
+--- rep 2 ---
+orders=1010000  paced rate=200000/s  cpus: producer=6 engine=2  (hw threads: 12)
+
+queue  book | throughput |   p50 ns   p99 ns p99.9 ns    max ns   achvd k/s
+-----------+------------+--------------------------------------------------
+mutex  V1   |     2.74 M/s |     1827     2498  7123764  11978401         200
+mutex  V3   |     2.87 M/s |     1829     2294    14087    484242         200
+spsc   V1   |     4.97 M/s |      385     1001  8306636  13035944         200
+spsc   V3   |     6.05 M/s |      372      619     5048     34012         200
+
+result check: trades=789497 traded_qty=20135763  all 4 configs identical: YES
+--- rep 3 ---
+orders=1010000  paced rate=200000/s  cpus: producer=6 engine=2  (hw threads: 12)
+
+queue  book | throughput |   p50 ns   p99 ns p99.9 ns    max ns   achvd k/s
+-----------+------------+--------------------------------------------------
+mutex  V1   |     2.69 M/s |     1808     3181  7091974  11945509         200
+mutex  V3   |     3.08 M/s |     1824     2633    73340   1822043         200
+spsc   V1   |     4.82 M/s |      367     1024  7654581  12392792         200
+spsc   V3   |     6.00 M/s |      370      603     5049     35200         200
+
+result check: trades=789497 traded_qty=20135763  all 4 configs identical: YES

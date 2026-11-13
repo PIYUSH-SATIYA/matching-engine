@@ -1,0 +1,43 @@
+# Host-sensitivity check (manual, one-off)
+
+Purpose: decide whether the multi-millisecond p99.9 tails in the matrix were a
+property of the pipeline or of the host. This was a *diagnostic*, not part of the
+committed measurement chain; it was performed once and not repeated.
+
+Intervention: the desktop process responsible for the sustained load (a terminal
+emulator, pid 43546, consuming ~380 % CPU for its entire lifetime) was confined to
+the E-cores for the duration of the test with `taskset -a -pc 8-11`, and restored
+to its original `0-11` affinity by a shell `trap` on exit. No process was killed,
+reniced, or stopped.
+
+Configuration under test in both halves: spsc / fast-slab / epoll / pinned engine,
+1.01 M orders at 200 k orders/s, client pinned to CPU 6.
+
+Both halves were measured while the desktop process was still running at ~380 % CPU.
+
+| condition | n | p50 | p99 | p99.9 | max | net thread run-queue wait | orders >1 ms before parse |
+|---|---|---|---|---|---|---|---|
+| desktop free to use all CPUs | 3 | 26.0 us | 1046 us | 2400 us | 2896 us | 97.65 ms | 10017 |
+| desktop confined to E-cores | 3 | 22.5 us | 68 us | 142 us | 240 us | 1.17 ms | 0 |
+
+Same binary, same configuration, same client. The engine thread's run-queue wait
+was 0.29 ms in the confined half, so the engine was not the delayed component: the
+network thread was. A mutex-queue control measured in the same confined window
+gave p99.9 = 299 us, which is consistent with the matrix's uncontended mutex rows
+and shows the improvement was not an artefact of the queue type.
+
+Interpretation: the multi-millisecond tails are ingress delay caused by host
+scheduling contention, not by matching. This is the same conclusion the
+`net_ingest_slow`, arrival/service split and `net run-queue wait` columns reach from
+in-process counters alone, without touching the host.
+
+Raw log:
+
+```
+kitty_before= 384
+kitty repinned to 8-11
+kitty_after_pin= 384
+kitty_restored=pid 43546's current affinity list: 0-11
+iso-mutex p50=28.4us p99=81us p999=299us max=1525us nivcsw=1 eng_runq=16.82ms net_runq=1.37ms ingest_slow=0 ingest_max=221us
+iso-spsc p50=22.5us p99=68us p999=142us max=240us nivcsw=38 eng_runq=0.29ms net_runq=1.17ms ingest_slow=0 ingest_max=202us
+```

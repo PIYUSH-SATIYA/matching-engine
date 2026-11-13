@@ -1,0 +1,26 @@
+# bench_order_book ops=2000000 seed=42 reps=3 cpu=2
+# 2026-11-14T00:21:10+05:30
+--- rep 1 ---
+ops=2000000 seed=42 (70% new orders / 30% cancels)
+
+book                          throughput |    p50    p90     p99    p99.9        max   (latency in ns, incl. ~25 ns clock cost)
+V1 map+list+unordered_map     9.36 M/s |     99    274     489      706   14022798
+V3 array+slab+bitmap         29.06 M/s |    108    146     273      442      21659
+
+trades=1093640 cancels ok/miss=88304/512136 | V1 == V3 results: YES
+--- rep 2 ---
+ops=2000000 seed=42 (70% new orders / 30% cancels)
+
+book                          throughput |    p50    p90     p99    p99.9        max   (latency in ns, incl. ~25 ns clock cost)
+V1 map+list+unordered_map     9.62 M/s |     98    272     485      695   13941361
+V3 array+slab+bitmap         29.11 M/s |    109    150     279      471      21693
+
+trades=1093640 cancels ok/miss=88304/512136 | V1 == V3 results: YES
+--- rep 3 ---
+ops=2000000 seed=42 (70% new orders / 30% cancels)
+
+book                          throughput |    p50    p90     p99    p99.9        max   (latency in ns, incl. ~25 ns clock cost)
+V1 map+list+unordered_map     9.56 M/s |     99    273     487      701   14079298
+V3 array+slab+bitmap         29.19 M/s |    109    147     276      456      21682
+
+trades=1093640 cancels ok/miss=88304/512136 | V1 == V3 results: YES

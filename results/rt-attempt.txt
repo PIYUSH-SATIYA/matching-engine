@@ -1,0 +1,4 @@
+exit_code=2
+note=SCHED_FIFO requires CAP_SYS_NICE or a realtime RLIMIT; see log below
+--- log ---
+SCHED_FIFO denied: need CAP_SYS_NICE (run in the SYS_NICE container or setcap the binary)
