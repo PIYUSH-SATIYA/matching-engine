@@ -69,21 +69,22 @@ void test_fifo() {
 void test_capacity() {
   RingBuffer queue;
 
-  for (OrderId id = 1; id <= 128; ++id) {
+  constexpr auto CAP = static_cast<OrderId>(RingBuffer::CAPACITY);
+  for (OrderId id = 1; id <= CAP; ++id) {
     queue.push(make_order(id));
   }
 
-  check(queue.full(), "queue should be full at capacity 128");
+  check(queue.full(), "queue should be full at capacity");
 
   // Free one slot, then reuse it.
   const Order first = queue.pop();
   check(first.id == 1, "first order should be removed first");
   check(!queue.full(), "queue should have space after one pop");
 
-  queue.push(make_order(129));
+  queue.push(make_order(CAP + 1));
   check(queue.full(), "queue should become full again");
 
-  for (OrderId id = 2; id <= 129; ++id) {
+  for (OrderId id = 2; id <= CAP + 1; ++id) {
     const Order actual = queue.pop();
     check(actual.id == id, "capacity test FIFO order incorrect");
   }
@@ -138,14 +139,15 @@ void test_consumer_blocks_when_empty() {
 void test_producer_blocks_when_full() {
   RingBuffer queue;
 
-  for (OrderId id = 1; id <= 128; ++id) {
+  constexpr auto CAP = static_cast<OrderId>(RingBuffer::CAPACITY);
+  for (OrderId id = 1; id <= CAP; ++id) {
     queue.push(make_order(id));
   }
 
   std::atomic<bool> completed{false};
 
   std::thread producer([&] {
-    queue.push(make_order(129));
+    queue.push(make_order(CAP + 1));
     completed.store(true, std::memory_order_release);
   });
 
@@ -162,7 +164,7 @@ void test_producer_blocks_when_full() {
   check(completed.load(std::memory_order_acquire),
         "producer should finish after space becomes available");
 
-  for (OrderId id = 2; id <= 129; ++id) {
+  for (OrderId id = 2; id <= CAP + 1; ++id) {
     check(queue.pop().id == id, "producer blocking test violated FIFO order");
   }
 

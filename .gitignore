@@ -4,3 +4,8 @@ build/
 compile_commands.json
 .cache/
 build*/
+results/raw/
+results/plots/*.svg
+results/summary.csv
+results/analysis.json
+__pycache__/

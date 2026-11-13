@@ -163,6 +163,7 @@ static void unitTests(const char* name) {
 
 // ------------------------------------------------------------ differential
 using Fast = OrderBookFast<(1u << 18), 4096>;
+using FastHeap = OrderBookFast<(1u << 18), 4096, true>;
 
 template <class A, class B>
 static void sameState(A& a, B& b) {
@@ -183,9 +184,10 @@ static void sameState(A& a, B& b) {
   }
 }
 
+template <class FastBook>
 static void differentialTest(std::uint64_t seed, std::size_t ops, double sd) {
   OrderBook ref;
-  Fast fast(/*min_price=*/4000);  // range [4000, 8096): also tests the offset
+  FastBook fast(/*min_price=*/4000);  // range [4000, 8096): also tests the offset
   std::mt19937_64 rng(seed);
   std::normal_distribution<double> off(0.0, sd);
   OrderId next_id = 1;
@@ -263,10 +265,15 @@ static void limitsTest() {
 int main() {
   std::puts("V1 OrderBook:");
   unitTests<OrderBook>("V1");
-  std::puts("V3 OrderBookFast:");
-  unitTests<OrderBookFast<1024, 1024>>("V3");
-  differentialTest(1, 300000, 15.0);
-  differentialTest(2, 300000, 400.0);  // wide spread -> many levels, level gaps
+  std::puts("V3 OrderBookFast (slab):");
+  unitTests<OrderBookFast<1024, 1024>>("V3-slab");
+  std::puts("V3 OrderBookFast (heap):");
+  unitTests<OrderBookFast<1024, 1024, true>>("V3-heap");
+  differentialTest<Fast>(1, 300000, 15.0);
+  differentialTest<Fast>(2, 300000, 400.0);  // wide spread -> many levels, level gaps
+  std::puts("V3 OrderBookFast (heap) differential:");
+  differentialTest<FastHeap>(1, 300000, 15.0);
+  differentialTest<FastHeap>(2, 300000, 400.0);
   hashStress();
   limitsTest();
   std::puts("All OrderBookFast tests passed.");

@@ -53,6 +53,10 @@ class SpscRingBuffer {
   SpscRingBuffer(const SpscRingBuffer&) = delete;
   SpscRingBuffer& operator=(const SpscRingBuffer&) = delete;
 
+  // Diagnostics: how often the consumer/producer had to give up the CPU.
+  // Useful for explaining busy-wait cost in the benchmark report.
+  static inline std::atomic<std::uint64_t> g_yields{0};
+
   // ---- producer thread only ------------------------------------------
   bool try_push(const Order& o) noexcept {
     const std::size_t t = tail_.load(std::memory_order_relaxed);
@@ -102,8 +106,21 @@ class SpscRingBuffer {
   // Spin with a CPU "pause" hint; after many fruitless spins give the core
   // away so we do not starve the other thread if both share one core.
   static void wait_hint(unsigned spins) noexcept {
-    if (spins < 4096) ME_CPU_RELAX();
-    else std::this_thread::yield();
+    // Short spin first: the peer is usually only nanoseconds behind.
+    if (spins < 4096) {
+      ME_CPU_RELAX();
+      return;
+    }
+    // After that, spin in blocks and give the core away once per block.  It is
+    // important to yield *periodically*, not on every iteration: an
+    // unconditional yield-after-4096 turns into a sched_yield storm and the
+    // wait becomes a kernel-time burner.
+    if ((spins & 0xFFFu) == 0) {
+      g_yields.fetch_add(1, std::memory_order_relaxed);
+      std::this_thread::yield();
+    } else {
+      ME_CPU_RELAX();
+    }
   }
 
   // consumer-owned line

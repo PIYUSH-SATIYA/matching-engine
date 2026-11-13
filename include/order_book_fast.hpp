@@ -32,12 +32,41 @@
 #include <cstdint>
 #include <memory>
 #include <new>
+#include <type_traits>
 #include <vector>
 
 #include "order.hpp"
 #include "slab_allocator.hpp"
 
-template <std::size_t MaxOrders = (1u << 20), std::size_t NumLevels = (1u << 16)>
+// General-purpose allocator baseline for the allocator experiment.  It keeps
+// the same book data structures and differs only in where each order node
+// comes from: `new`/`delete` instead of the pre-allocated slab.
+template <class T>
+class HeapAllocator {
+ public:
+    T* allocate() {
+        // T may be over-aligned (OrderBookFast::Node is alignas(64)), so the
+        // plain operator new overload is not sufficient.
+        void* p = ::operator new(sizeof(T), std::align_val_t(alignof(T)),
+                                 std::nothrow);
+        if (!p) return nullptr;
+        ++allocated_;
+        return static_cast<T*>(p);
+    }
+    void deallocate(T* p) {
+        if (p) {
+            --allocated_;
+            ::operator delete(p, std::align_val_t(alignof(T)));
+        }
+    }
+    std::size_t allocated() const { return allocated_; }
+
+ private:
+    std::size_t allocated_{0};
+};
+
+template <std::size_t MaxOrders = (1u << 20), std::size_t NumLevels = (1u << 16),
+          bool UseHeap = false>
 class OrderBookFast {
   static_assert(NumLevels % 64 == 0 && NumLevels >= 64,
                 "NumLevels must be a multiple of 64");
@@ -138,7 +167,9 @@ class OrderBookFast {
     Node* next;
   };
   static_assert(sizeof(Node) == 64, "Node should be exactly one cache line");
-  using Slab = SlabAllocator<Node, MaxOrders>;
+  using Slab =
+      std::conditional_t<UseHeap, HeapAllocator<Node>,
+                         SlabAllocator<Node, MaxOrders>>;
 
   struct Level {
     Node* head = nullptr;  // oldest: matched first

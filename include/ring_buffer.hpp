@@ -8,9 +8,12 @@
 
 class RingBuffer {
 
-private:
-  static constexpr std::size_t CAPACITY = 128;
+public:
+  // Same capacity as the SPSC queue used in the comparison.  The object is
+  // heap-allocated by the application, so this is ~768 KB, not a stack array.
+  static constexpr std::size_t CAPACITY = 16384;
 
+private:
   std::array<Order, CAPACITY> buffer{};
 
   // insert at tail and pop from head

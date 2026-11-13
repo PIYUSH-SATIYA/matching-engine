@@ -36,6 +36,10 @@ if(NOT CMAKE_BUILD_TYPE AND NOT ENABLE_SANITIZERS AND NOT ENABLE_TSAN)
 endif()
 
 find_package(Threads REQUIRED)
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(URING QUIET liburing)
+endif()
 
 # Main application
 add_executable(matching_engine
@@ -43,9 +47,18 @@ add_executable(matching_engine
     src/order_book.cpp
     src/ring_buffer.cpp
     src/network_epoll.cpp
+    src/network_io_uring.cpp
 )
 target_include_directories(matching_engine PRIVATE include src)
 target_link_libraries(matching_engine PRIVATE pthread Threads::Threads)
+if(URING_FOUND)
+    target_include_directories(matching_engine PRIVATE ${URING_INCLUDE_DIRS})
+    target_link_libraries(matching_engine PRIVATE ${URING_LIBRARIES})
+    target_compile_definitions(matching_engine PRIVATE ME_HAS_IO_URING=1)
+    message(STATUS "io_uring backend enabled (liburing ${URING_VERSION})")
+else()
+    message(STATUS "liburing not found: --net uring will be unavailable")
+endif()
 
 # ---------------------------------------------------------------------------
 # Tests
@@ -121,3 +134,8 @@ target_link_libraries(bench_pipeline PRIVATE Threads::Threads)
 
 add_executable(load_client tools/load_client.cpp)
 target_include_directories(load_client PRIVATE include)
+
+# --- wire protocol parser (split / coalesced / invalid messages) ------------
+add_executable(wire_test tests/test_wire.cpp)
+target_include_directories(wire_test PRIVATE include)
+add_test(NAME wire_test COMMAND wire_test)
