@@ -1,0 +1,93 @@
+# bench_false_sharing orders=5000000 seed=42 reps=9
+# producer cpu=6 consumer cpu=2
+# 2026-11-14T15:18:01+05:30
+--- rep 1 ---
+orders=5000000 capacity=16384 requested pinning: producer=6 consumer=2 (-1 = none)
+
+layout          throughput        p50      p99     p99.9        max      (latency ns, includes ~25 ns clock cost)
+padded             6.90 M/s      181      244     3824      20210
+  cores: producer=6 consumer=2 (padded)
+packed            13.35 M/s      855    18744    28605      30454
+  cores: producer=6 consumer=2 (packed)
+
+padded_vs_packed_throughput=0.52 x
+--- rep 2 ---
+orders=5000000 capacity=16384 requested pinning: producer=6 consumer=2 (-1 = none)
+
+layout          throughput        p50      p99     p99.9        max      (latency ns, includes ~25 ns clock cost)
+padded             6.98 M/s      182      276     4993      22525
+  cores: producer=6 consumer=2 (padded)
+packed             6.27 M/s      256      343     9910      28445
+  cores: producer=6 consumer=2 (packed)
+
+padded_vs_packed_throughput=1.11 x
+--- rep 3 ---
+orders=5000000 capacity=16384 requested pinning: producer=6 consumer=2 (-1 = none)
+
+layout          throughput        p50      p99     p99.9        max      (latency ns, includes ~25 ns clock cost)
+padded            18.11 M/s      319      594     3001      15683
+  cores: producer=6 consumer=2 (padded)
+packed             8.53 M/s      252     5809   492175     546835
+  cores: producer=6 consumer=2 (packed)
+
+padded_vs_packed_throughput=2.12 x
+--- rep 4 ---
+orders=5000000 capacity=16384 requested pinning: producer=6 consumer=2 (-1 = none)
+
+layout          throughput        p50      p99     p99.9        max      (latency ns, includes ~25 ns clock cost)
+padded            15.28 M/s      184      586     2872      13319
+  cores: producer=6 consumer=2 (padded)
+packed             8.80 M/s      261     8421   290974     313981
+  cores: producer=6 consumer=2 (packed)
+
+padded_vs_packed_throughput=1.74 x
+--- rep 5 ---
+orders=5000000 capacity=16384 requested pinning: producer=6 consumer=2 (-1 = none)
+
+layout          throughput        p50      p99     p99.9        max      (latency ns, includes ~25 ns clock cost)
+padded             6.89 M/s      195   184030   317806     365555
+  cores: producer=6 consumer=2 (padded)
+packed            12.92 M/s      193      315     4974      13699
+  cores: producer=6 consumer=2 (packed)
+
+padded_vs_packed_throughput=0.53 x
+--- rep 6 ---
+orders=5000000 capacity=16384 requested pinning: producer=6 consumer=2 (-1 = none)
+
+layout          throughput        p50      p99     p99.9        max      (latency ns, includes ~25 ns clock cost)
+padded             6.95 M/s      186      265     6232      20141
+  cores: producer=6 consumer=2 (padded)
+packed             7.41 M/s      258      806   335800     387912
+  cores: producer=6 consumer=2 (packed)
+
+padded_vs_packed_throughput=0.94 x
+--- rep 7 ---
+orders=5000000 capacity=16384 requested pinning: producer=6 consumer=2 (-1 = none)
+
+layout          throughput        p50      p99     p99.9        max      (latency ns, includes ~25 ns clock cost)
+padded             7.01 M/s      183    55005   233217     244308
+  cores: producer=6 consumer=2 (padded)
+packed            13.70 M/s      783    28872    40947      42868
+  cores: producer=6 consumer=2 (packed)
+
+padded_vs_packed_throughput=0.51 x
+--- rep 8 ---
+orders=5000000 capacity=16384 requested pinning: producer=6 consumer=2 (-1 = none)
+
+layout          throughput        p50      p99     p99.9        max      (latency ns, includes ~25 ns clock cost)
+padded             6.84 M/s      180      258     6627      21923
+  cores: producer=6 consumer=2 (padded)
+packed             7.28 M/s      242      398     7944      33904
+  cores: producer=6 consumer=2 (packed)
+
+padded_vs_packed_throughput=0.94 x
+--- rep 9 ---
+orders=5000000 capacity=16384 requested pinning: producer=6 consumer=2 (-1 = none)
+
+layout          throughput        p50      p99     p99.9        max      (latency ns, includes ~25 ns clock cost)
+padded             6.87 M/s      183      267     4624      25259
+  cores: producer=6 consumer=2 (padded)
+packed            16.94 M/s     1137    26411    30424      31720
+  cores: producer=6 consumer=2 (packed)
+
+padded_vs_packed_throughput=0.41 x

@@ -5,19 +5,19 @@ Latency is client-send → engine-complete (CLOCK_MONOTONIC, same host). Latency
 
 ## Latency runs (200k orders/s, 10k warmup)
 
-| config | runs | clean runs | p50 | p90 | p99 | p99.9 | p99.9 (clean) | p99.9 range | max | kernel ops/run | engine run-queue wait | net run-queue wait |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| allocator: fast-heap | 5 | 5 | 23.8 µs | 34.1 µs | 76.1 µs | 160.9 µs | 160.9 µs | 147.9 µs–163.6 µs | 325.8 µs | 47325 | 8.49 ms | 1.15 ms |
-| allocator: fast-slab | 5 | 5 | 25.4 µs | 36.0 µs | 71.5 µs | 158.2 µs | 158.2 µs | 150.8 µs–167.0 µs | 250.0 µs | 47330 | 8.36 ms | 2.12 ms |
-| allocator: v1 | 5 | 5 | 22.5 µs | 33.6 µs | 92.2 µs | 9.60 ms | 9.60 ms | 9.53 ms–9.89 ms | 14.17 ms | 47342 | 8.71 ms | 1.10 ms |
-| mutex / default / epoll | 5 | 4 | 21.8 µs | 55.8 µs | 106.4 µs | 182.9 µs | 178.8 µs | 160.9 µs–649.7 µs | 321.8 µs | 47332 | 0.38 ms | 1.55 ms |
-| mutex / default / uring | 5 | 5 | 27.3 µs | 58.2 µs | 113.2 µs | 177.8 µs | 177.8 µs | 158.5 µs–182.3 µs | 365.0 µs | 31564 | 0.40 ms | 1.32 ms |
-| mutex / pin / epoll | 5 | 5 | 30.5 µs | 62.2 µs | 88.3 µs | 450.6 µs | 450.6 µs | 247.0 µs–483.2 µs | 1.69 ms | 47338 | 37.67 ms | 2.04 ms |
-| mutex / pin / uring | 5 | 5 | 31.2 µs | 64.5 µs | 116.0 µs | 374.9 µs | 374.9 µs | 255.4 µs–881.5 µs | 1.84 ms | 31566 | 32.81 ms | 2.00 ms |
-| spsc / default / epoll | 5 | 5 | 24.5 µs | 32.1 µs | 46.7 µs | 159.8 µs | 159.8 µs | 145.2 µs–170.0 µs | 247.2 µs | 47331 | 3.50 ms | 1.56 ms |
-| spsc / default / uring | 5 | 5 | 26.9 µs | 38.1 µs | 102.3 µs | 162.2 µs | 162.2 µs | 149.7 µs–168.7 µs | 258.7 µs | 31566 | 8.46 ms | 1.07 ms |
-| spsc / pin / epoll | 10 | 0 | 24.8 µs | 75.9 µs | 953.7 µs | 2.55 ms | – | 1.72 ms–2.85 ms | 2.92 ms | 44819 | 0.52 ms | 99.53 ms |
-| spsc / pin / uring | 10 | 4 | 25.5 µs | 60.4 µs | 1.31 ms | 2.71 ms | 135.4 µs | 118.0 µs–2.90 ms | 2.89 ms | 31087 | 0.47 ms | 146.26 ms |
+| config | runs | clean runs | p50 | p90 | p95 | p99 | p99.9 | p99.9 (clean) | p99.9 range | max | engine CPU % | kernel ops/run | engine run-queue wait | net run-queue wait |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| allocator: fast-heap | 10 | 9 | 26.2 µs | 37.3 µs | 40.1 µs | 52.8 µs | 152.2 µs | 151.6 µs | 140.0 µs–241.4 µs | 332.9 µs | 101% | 47326 | 0.24 ms | 1.27 ms |
+| allocator: fast-slab | 10 | 10 | 25.6 µs | 36.2 µs | 38.9 µs | 53.3 µs | 155.9 µs | 155.9 µs | 144.4 µs–173.4 µs | 247.3 µs | 101% | 47330 | 0.26 ms | 1.49 ms |
+| allocator: v1 | 10 | 10 | 24.2 µs | 35.8 µs | 40.2 µs | 84.0 µs | 9.56 ms | 9.56 ms | 8.72 ms–10.02 ms | 14.13 ms | 101% | 47335 | 0.21 ms | 1.59 ms |
+| mutex / default / epoll | 10 | 10 | 26.2 µs | 54.8 µs | 62.4 µs | 94.9 µs | 170.2 µs | 170.2 µs | 149.7 µs–225.0 µs | 341.1 µs | 8% | 47340 | 0.74 ms | 0.91 ms |
+| mutex / default / uring | 10 | 4 | 26.9 µs | 60.2 µs | 66.9 µs | 118.3 µs | 563.2 µs | 171.0 µs | 154.1 µs–2.90 ms | 2.87 ms | 8% | 31550 | 1.85 ms | 5.57 ms |
+| mutex / pin / epoll | 10 | 0 | 31.8 µs | 67.6 µs | 132.1 µs | 1.63 ms | 2.84 ms | – | 2.53 ms–2.87 ms | 2.94 ms | 9% | 46566 | 142.79 ms | 26.67 ms |
+| mutex / pin / uring | 10 | 7 | 33.0 µs | 63.6 µs | 73.1 µs | 272.4 µs | 1.21 ms | 1.13 ms | 1.03 ms–2.57 ms | 2.81 ms | 8% | 31557 | 92.02 ms | 6.53 ms |
+| spsc / default / epoll | 10 | 1 | 24.4 µs | 37.4 µs | 49.2 µs | 141.6 µs | 1.34 ms | 142.7 µs | 142.7 µs–2.20 ms | 2.70 ms | 101% | 46626 | 10.70 ms | 24.13 ms |
+| spsc / default / uring | 10 | 8 | 24.5 µs | 36.7 µs | 46.1 µs | 98.3 µs | 151.6 µs | 149.9 µs | 133.5 µs–2.49 ms | 269.9 µs | 101% | 31561 | 8.02 ms | 1.70 ms |
+| spsc / pin / epoll | 10 | 1 | 22.6 µs | 36.2 µs | 46.8 µs | 174.7 µs | 1.79 ms | 159.3 µs | 159.3 µs–2.44 ms | 2.83 ms | 101% | 46606 | 0.24 ms | 30.84 ms |
+| spsc / pin / uring | 10 | 0 | 23.3 µs | 36.7 µs | 64.4 µs | 716.1 µs | 2.78 ms | – | 1.91 ms–2.84 ms | 2.89 ms | 101% | 31312 | 0.19 ms | 70.90 ms |
 
 `clean runs` counts repetitions in which **no** order was already more than 1 ms old when the network thread parsed it. A run with zero clean runs could not be measured on this host: the desktop session delayed ingress, and that is an ingress/scheduling result, not a pipeline result.
 
@@ -27,17 +27,17 @@ Total = arrival (client send → network thread parse) + service (parse → engi
 
 | config | total p50 | arrival p50 | service p50 | total p99.9 | arrival p99.9 | service p99.9 | arrival share of p99.9 |
 |---|---|---|---|---|---|---|---|
-| allocator: fast-heap | 23.8 µs | 19.9 µs | 5.4 µs | 160.9 µs | 137.7 µs | 31.9 µs | 86% |
-| allocator: fast-slab | 25.4 µs | 21.1 µs | 4.6 µs | 158.2 µs | 141.6 µs | 22.1 µs | 89% |
-| allocator: v1 | 22.5 µs | 18.4 µs | 6.4 µs | 9.60 ms | 141.5 µs | 9.58 ms | 1% |
-| mutex / default / epoll | 21.8 µs | 11.1 µs | 7.0 µs | 182.9 µs | 153.9 µs | 120.4 µs | 84% |
-| mutex / default / uring | 27.3 µs | 21.2 µs | 5.9 µs | 177.8 µs | 133.7 µs | 110.8 µs | 75% |
-| mutex / pin / epoll | 30.5 µs | 15.4 µs | 11.8 µs | 450.6 µs | 138.8 µs | 367.1 µs | 31% |
-| mutex / pin / uring | 31.2 µs | 18.4 µs | 11.2 µs | 374.9 µs | 129.0 µs | 361.8 µs | 34% |
-| spsc / default / epoll | 24.5 µs | 20.6 µs | 4.6 µs | 159.8 µs | 125.9 µs | 24.5 µs | 79% |
-| spsc / default / uring | 26.9 µs | 23.3 µs | 4.0 µs | 162.2 µs | 139.2 µs | 24.1 µs | 86% |
-| spsc / pin / epoll | 24.8 µs | 20.3 µs | 4.2 µs | 2.55 ms | 2.54 ms | 121.9 µs | 99% |
-| spsc / pin / uring | 25.5 µs | 21.1 µs | 4.6 µs | 2.71 ms | 2.69 ms | 96.7 µs | 100% |
+| allocator: fast-heap | 26.2 µs | 21.3 µs | 5.3 µs | 152.2 µs | 124.8 µs | 32.5 µs | 82% |
+| allocator: fast-slab | 25.6 µs | 21.3 µs | 4.6 µs | 155.9 µs | 135.7 µs | 22.8 µs | 87% |
+| allocator: v1 | 24.2 µs | 19.9 µs | 6.1 µs | 9.56 ms | 124.6 µs | 9.54 ms | 1% |
+| mutex / default / epoll | 26.2 µs | 15.7 µs | 7.6 µs | 170.2 µs | 131.3 µs | 126.3 µs | 77% |
+| mutex / default / uring | 26.9 µs | 20.3 µs | 6.6 µs | 563.2 µs | 460.3 µs | 160.6 µs | 82% |
+| mutex / pin / epoll | 31.8 µs | 16.7 µs | 11.9 µs | 2.84 ms | 1.55 ms | 2.81 ms | 55% |
+| mutex / pin / uring | 33.0 µs | 16.9 µs | 11.7 µs | 1.21 ms | 156.7 µs | 1.14 ms | 13% |
+| spsc / default / epoll | 24.4 µs | 20.9 µs | 4.0 µs | 1.34 ms | 1.20 ms | 98.0 µs | 90% |
+| spsc / default / uring | 24.5 µs | 21.2 µs | 4.3 µs | 151.6 µs | 129.2 µs | 29.8 µs | 85% |
+| spsc / pin / epoll | 22.6 µs | 19.1 µs | 4.4 µs | 1.79 ms | 1.75 ms | 92.2 µs | 98% |
+| spsc / pin / uring | 23.3 µs | 20.3 µs | 4.6 µs | 2.78 ms | 2.75 ms | 92.0 µs | 99% |
 
 ## Clean-run view
 
@@ -45,33 +45,76 @@ Medians computed only over repetitions in which ingress was not delayed by the h
 
 | config | clean runs | p50 | p99.9 | arrival p99.9 | service p99.9 | arrival share |
 |---|---|---|---|---|---|---|
-| allocator: fast-heap | 5/5 | 23.8 µs | 160.9 µs | 137.7 µs | 31.9 µs | 86% |
-| allocator: fast-slab | 5/5 | 25.4 µs | 158.2 µs | 141.6 µs | 22.1 µs | 89% |
-| allocator: v1 | 5/5 | 22.5 µs | 9.60 ms | 141.5 µs | 9.58 ms | 1% |
-| mutex / default / epoll | 4/5 | 23.0 µs | 178.8 µs | 151.7 µs | 119.1 µs | 85% |
-| mutex / default / uring | 5/5 | 27.3 µs | 177.8 µs | 133.7 µs | 110.8 µs | 75% |
-| mutex / pin / epoll | 5/5 | 30.5 µs | 450.6 µs | 138.8 µs | 367.1 µs | 31% |
-| mutex / pin / uring | 5/5 | 31.2 µs | 374.9 µs | 129.0 µs | 361.8 µs | 34% |
-| spsc / default / epoll | 5/5 | 24.5 µs | 159.8 µs | 125.9 µs | 24.5 µs | 79% |
-| spsc / default / uring | 5/5 | 26.9 µs | 162.2 µs | 139.2 µs | 24.1 µs | 86% |
-| spsc / pin / epoll | 0/10 | – | – | – | – | – |
-| spsc / pin / uring | 4/10 | 24.4 µs | 135.4 µs | 115.6 µs | 18.5 µs | 85% |
+| allocator: fast-heap | 9/10 | 26.4 µs | 151.6 µs | 124.6 µs | 32.0 µs | 82% |
+| allocator: fast-slab | 10/10 | 25.6 µs | 155.9 µs | 135.7 µs | 22.8 µs | 87% |
+| allocator: v1 | 10/10 | 24.2 µs | 9.56 ms | 124.6 µs | 9.54 ms | 1% |
+| mutex / default / epoll | 10/10 | 26.2 µs | 170.2 µs | 131.3 µs | 126.3 µs | 77% |
+| mutex / default / uring | 4/10 | 26.3 µs | 171.0 µs | 112.8 µs | 113.5 µs | 66% |
+| mutex / pin / epoll | 0/10 | – | – | – | – | – |
+| mutex / pin / uring | 7/10 | 32.6 µs | 1.13 ms | 150.9 µs | 1.10 ms | 13% |
+| spsc / default / epoll | 1/10 | 24.2 µs | 142.7 µs | 128.3 µs | 64.4 µs | 90% |
+| spsc / default / uring | 8/10 | 24.5 µs | 149.9 µs | 124.5 µs | 28.4 µs | 83% |
+| spsc / pin / epoll | 1/10 | 18.3 µs | 159.3 µs | 140.4 µs | 18.1 µs | 88% |
+| spsc / pin / uring | 0/10 | – | – | – | – | – |
 
 ## Throughput runs (unthrottled)
 
 | config | runs | orders/s | engine CPU/order | net CPU/order | nvcsw | nivcsw | net nvcsw | kernel ops/run | SPSC yields |
 |---|---|---|---|---|---|---|---|---|---|
-| spsc / pin / uring | 3 | 4.86 M/s | 0.21 µs | 0.20 µs | 0 | 3 | 11 | 40328 | 17 |
-| spsc / default / epoll | 3 | 4.82 M/s | 0.21 µs | 0.20 µs | 0 | 30 | 7 | 20178 | 9 |
-| allocator: fast-slab | 3 | 4.82 M/s | 0.21 µs | 0.20 µs | 0 | 80 | 12 | 20188 | 14 |
-| spsc / default / uring | 3 | 4.76 M/s | 0.21 µs | 0.21 µs | 0 | 56 | 14 | 40328 | 30 |
-| spsc / pin / epoll | 3 | 4.59 M/s | 0.22 µs | 0.21 µs | 0 | 8 | 14 | 20190 | 25 |
-| allocator: fast-heap | 3 | 4.40 M/s | 0.23 µs | 0.23 µs | 0 | 89 | 8 | 20180 | 8 |
-| allocator: v1 | 3 | 3.75 M/s | 0.27 µs | 0.26 µs | 0 | 104 | 9 | 20182 | 224 |
-| mutex / default / uring | 3 | 3.05 M/s | 0.33 µs | 0.24 µs | 122 | 132 | 153821 | 40328 | 0 |
-| mutex / pin / uring | 3 | 3.00 M/s | 0.33 µs | 0.23 µs | 35 | 127 | 156944 | 40328 | 0 |
-| mutex / pin / epoll | 3 | 2.99 M/s | 0.33 µs | 0.23 µs | 56 | 131 | 154890 | 20168 | 0 |
-| mutex / default / epoll | 3 | 2.89 M/s | 0.35 µs | 0.24 µs | 62 | 153 | 168442 | 20168 | 0 |
+| spsc / default / epoll | 5 | 5.00 M/s | 0.20 µs | 0.20 µs | 0 | 73 | 14 | 20182 | 32 |
+| spsc / default / uring | 5 | 4.88 M/s | 0.20 µs | 0.20 µs | 0 | 46 | 11 | 40328 | 35 |
+| allocator: fast-slab | 5 | 4.82 M/s | 0.21 µs | 0.20 µs | 0 | 3 | 9 | 20180 | 27 |
+| spsc / pin / uring | 5 | 4.75 M/s | 0.21 µs | 0.21 µs | 0 | 3 | 12 | 40328 | 13 |
+| spsc / pin / epoll | 5 | 4.72 M/s | 0.21 µs | 0.21 µs | 0 | 3 | 11 | 20178 | 22 |
+| allocator: fast-heap | 5 | 4.46 M/s | 0.22 µs | 0.22 µs | 0 | 4 | 8 | 20181 | 11 |
+| allocator: v1 | 5 | 3.78 M/s | 0.26 µs | 0.26 µs | 0 | 2 | 7 | 20178 | 234 |
+| mutex / pin / epoll | 5 | 2.99 M/s | 0.34 µs | 0.24 µs | 61 | 5 | 169434 | 20170 | 0 |
+| mutex / default / uring | 5 | 2.96 M/s | 0.34 µs | 0.24 µs | 34 | 22 | 156991 | 40328 | 0 |
+| mutex / pin / uring | 5 | 2.96 M/s | 0.34 µs | 0.23 µs | 56 | 5 | 164515 | 40328 | 0 |
+| mutex / default / epoll | 5 | 2.88 M/s | 0.35 µs | 0.24 µs | 29 | 129 | 164688 | 20168 | 0 |
+
+## Queue saturation sweep (proposal Experiment 5)
+
+Fixed offered rate from the client, `kind=saturation`, so these runs are not mixed into the latency/throughput tables above. The sweep pushes the offered rate past each queue's service rate and records how many blocking push/pop calls occurred. A full or empty count above zero means the queue stopped absorbing the burst and the producer/consumer had to wait; the achieved rate plateaus at the service rate even as the offered rate rises.
+
+| queue / offered rate | runs | achieved orders/s | p50 | p95 | p99 | p99.9 | max | full waits | empty waits | engine CPU % |
+|---|---|---|---|---|---|---|---|---|---|---|
+| mutex / 50 k/s | 3 | 50 k/s | 240.0 µs | 297.6 µs | 338.8 µs | 1.34 ms | 2.39 ms | 0 | 1718 | 5% |
+| mutex / 100 k/s | 3 | 100 k/s | 69.4 µs | 152.9 µs | 218.9 µs | 805.0 µs | 2.15 ms | 0 | 3315 | 7% |
+| mutex / 200 k/s | 3 | 200 k/s | 31.9 µs | 64.0 µs | 76.4 µs | 232.5 µs | 909.4 µs | 0 | 7751 | 10% |
+| mutex / 400 k/s | 3 | 400 k/s | 17.6 µs | 23.8 µs | 26.4 µs | 1.04 ms | 2.79 ms | 0 | 12622 | 10% |
+| mutex / 800 k/s | 3 | 800 k/s | 18.2 µs | 26.6 µs | 31.5 µs | 406.6 µs | 1.27 ms | 0 | 25024 | 18% |
+| mutex / 1.60 M/s | 3 | 1.60 M/s | 15.6 µs | 20.8 µs | 35.5 µs | 558.6 µs | 1.69 ms | 0 | 46622 | 34% |
+| mutex / 3.20 M/s | 3 | 3.20 M/s | 15.3 µs | 20.4 µs | 86.8 µs | 510.7 µs | 630.5 µs | 0 | 45996 | 64% |
+| mutex / 6.40 M/s | 3 | 2.88 M/s | 25.53 ms | 29.29 ms | 30.25 ms | 31.92 ms | 32.99 ms | 383834 | 1 | 100% |
+| mutex / unthrottled | 3 | 2.91 M/s | 24.64 ms | 28.17 ms | 28.62 ms | 28.93 ms | 29.14 ms | 249188 | 1 | 100% |
+| spsc / 50 k/s | 3 | 50 k/s | 93.1 µs | 147.6 µs | 178.2 µs | 241.5 µs | 281.1 µs | 0 | 1721 | 110% |
+| spsc / 100 k/s | 3 | 100 k/s | 37.6 µs | 54.8 µs | 108.4 µs | 156.0 µs | 246.4 µs | 0 | 3297 | 105% |
+| spsc / 200 k/s | 3 | 200 k/s | 24.7 µs | 34.0 µs | 45.5 µs | 147.2 µs | 240.3 µs | 0 | 6412 | 102% |
+| spsc / 400 k/s | 3 | 400 k/s | 15.5 µs | 22.9 µs | 29.4 µs | 117.5 µs | 232.4 µs | 0 | 12650 | 101% |
+| spsc / 800 k/s | 3 | 800 k/s | 13.7 µs | 20.1 µs | 23.7 µs | 145.0 µs | 246.5 µs | 0 | 25093 | 100% |
+| spsc / 1.60 M/s | 3 | 1.60 M/s | 14.1 µs | 19.4 µs | 22.4 µs | 140.4 µs | 193.0 µs | 0 | 46764 | 100% |
+| spsc / 3.20 M/s | 3 | 3.20 M/s | 12.2 µs | 17.3 µs | 72.4 µs | 145.4 µs | 262.8 µs | 0 | 46066 | 100% |
+| spsc / 6.40 M/s | 3 | 6.40 M/s | 12.6 µs | 251.9 µs | 528.8 µs | 573.0 µs | 582.7 µs | 0 | 29754 | 100% |
+| spsc / unthrottled | 3 | 4.74 M/s | 15.26 ms | 17.36 ms | 17.78 ms | 18.05 ms | 18.22 ms | 1842771 | 1 | 100% |
+
+## Queue blocking counts (200k orders/s latency runs)
+
+Same counters at the normal 200k orders/s open-loop rate: how often the queue had nothing to hand over (`empty`) or no room (`full`). Medians across runs; a blocking queue and a spinning queue pay different costs for the same count.
+
+| config | full waits | empty waits | engine CPU % | net CPU % |
+|---|---|---|---|---|
+| allocator: fast-heap | 0 | 15778 | 101% | 5% |
+| allocator: fast-slab | 0 | 15786 | 101% | 5% |
+| allocator: v1 | 0 | 15736 | 101% | 4% |
+| mutex / default / epoll | 0 | 23779 | 8% | 7% |
+| mutex / default / uring | 0 | 25688 | 8% | 8% |
+| mutex / pin / epoll | 0 | 18942 | 9% | 7% |
+| mutex / pin / uring | 0 | 19972 | 8% | 7% |
+| spsc / default / epoll | 0 | 15542 | 101% | 5% |
+| spsc / default / uring | 0 | 15793 | 101% | 5% |
+| spsc / pin / epoll | 0 | 15551 | 101% | 4% |
+| spsc / pin / uring | 0 | 15332 | 101% | 5% |
 
 ## Component views
 
@@ -79,30 +122,30 @@ Queue (fixed: fast-slab, epoll, pinned engine/network/client):
 
 | config | clean runs | p50 | p99 | p99.9 | p99.9 (clean) |
 |---|---|---|---|---|---|
-| mutex / pin / epoll | 5/5 | 30.5 µs | 88.3 µs | 450.6 µs | 450.6 µs |
-| spsc / pin / epoll | 0/10 | 24.8 µs | 953.7 µs | 2.55 ms | – |
+| mutex / pin / epoll | 0/10 | 31.8 µs | 1.63 ms | 2.84 ms | – |
+| spsc / pin / epoll | 1/10 | 22.6 µs | 174.7 µs | 1.79 ms | 159.3 µs |
 
 Allocator (fixed: spsc, epoll, pinned):
 
 | config | clean runs | p50 | p99 | p99.9 | p99.9 (clean) |
 |---|---|---|---|---|---|
-| allocator: fast-heap | 5/5 | 23.8 µs | 76.1 µs | 160.9 µs | 160.9 µs |
-| allocator: fast-slab | 5/5 | 25.4 µs | 71.5 µs | 158.2 µs | 158.2 µs |
-| allocator: v1 | 5/5 | 22.5 µs | 92.2 µs | 9.60 ms | 9.60 ms |
+| allocator: fast-heap | 9/10 | 26.2 µs | 52.8 µs | 152.2 µs | 151.6 µs |
+| allocator: fast-slab | 10/10 | 25.6 µs | 53.3 µs | 155.9 µs | 155.9 µs |
+| allocator: v1 | 10/10 | 24.2 µs | 84.0 µs | 9.56 ms | 9.56 ms |
 
 Scheduling (fixed: spsc, fast-slab, epoll):
 
 | config | clean runs | p50 | p99 | p99.9 | p99.9 (clean) | engine run-queue wait | involuntary switches |
 |---|---|---|---|---|---|---|---|
-| spsc / default / epoll | 5/5 | 24.5 µs | 46.7 µs | 159.8 µs | 159.8 µs | 3.5 ms | 175 |
-| spsc / pin / epoll | 0/10 | 24.8 µs | 953.7 µs | 2.55 ms | – | 0.5 ms | 48 |
+| spsc / default / epoll | 1/10 | 24.4 µs | 141.6 µs | 1.34 ms | 142.7 µs | 10.7 ms | 464 |
+| spsc / pin / epoll | 1/10 | 22.6 µs | 174.7 µs | 1.79 ms | 159.3 µs | 0.2 ms | 33 |
 
 Network (fixed: spsc, fast-slab, pinned):
 
 | config | clean runs | p50 | p99 | p99.9 | p99.9 (clean) | kernel ops/run | net run-queue wait |
 |---|---|---|---|---|---|---|---|
-| spsc / pin / epoll | 0/10 | 24.8 µs | 953.7 µs | 2.55 ms | – | 44819 | 99.5 ms |
-| spsc / pin / uring | 4/10 | 25.5 µs | 1.31 ms | 2.71 ms | 135.4 µs | 31087 | 146.3 ms |
+| spsc / pin / epoll | 1/10 | 22.6 µs | 174.7 µs | 1.79 ms | 159.3 µs | 46606 | 30.8 ms |
+| spsc / pin / uring | 0/10 | 23.3 µs | 716.1 µs | 2.78 ms | – | 31312 | 70.9 ms |
 
 ## Mechanism probes: where the tail is spent
 
@@ -110,10 +153,10 @@ Network (fixed: spsc, fast-slab, pinned):
 
 | config | p50 | p99 | p99.9 | orders >1 ms before parse | share of orders | max arrival delay |
 |---|---|---|---|---|---|---|
-| probe-client-free | 24.3 µs | 70.0 µs | 153.0 µs | 0 / 1000000 | 0.00% | 205.7 µs |
-| probe-ingest-epoll | 19.5 µs | 41.3 µs | 157.6 µs | 0 / 1000000 | 0.00% | 215.0 µs |
-| probe-ingest-uring | 24.5 µs | 96.5 µs | 173.7 µs | 0 / 1000000 | 0.00% | 277.5 µs |
-| probe-net-pinned | 24.5 µs | 43.6 µs | 831.1 µs | 704 / 1000000 | 0.07% | 2.57 ms |
+| probe-client-free | 24.0 µs | 102.6 µs | 387.5 µs | 128 / 1000000 | 0.01% | 1.62 ms |
+| probe-ingest-epoll | 24.4 µs | 179.3 µs | 1.60 ms | 1920 / 1000000 | 0.19% | 2.84 ms |
+| probe-ingest-uring | 26.8 µs | 98.2 µs | 158.9 µs | 0 / 1000000 | 0.00% | 206.1 µs |
+| probe-net-pinned | 24.3 µs | 1.31 ms | 2.84 ms | 12804 / 1000000 | 1.28% | 2.89 ms |
 
 ## Correctness checksums
 
@@ -128,34 +171,85 @@ Identically seeded runs must produce the same trade count, traded quantity and t
 
 These are not pipeline measurements: at least one order was already >1 ms old when the network thread parsed it, so the delay happened before the engine could run. They are listed rather than deleted so the matrix stays auditable.
 
-- `probe-client-free` run 2: 64 orders >1 ms, max arrival 1.88 ms, net run-queue wait 3.3 ms
-- `probe-ingest-uring` run 2: 256 orders >1 ms, max arrival 1.66 ms, net run-queue wait 5.0 ms
-- `probe-net-pinned` run 1: 704 orders >1 ms, max arrival 2.57 ms, net run-queue wait 19.5 ms
-- `probe-net-pinned` run 2: 192 orders >1 ms, max arrival 1.20 ms, net run-queue wait 12.9 ms
-- `probe-net-pinned` run 3: 896 orders >1 ms, max arrival 2.75 ms, net run-queue wait 17.6 ms
-- `q-mutex_sched-default_net-epoll` run 2: 656 orders >1 ms, max arrival 1.33 ms, net run-queue wait 2.5 ms
-- `q-spsc_sched-pin_net-epoll` run 1: 10206 orders >1 ms, max arrival 2.94 ms, net run-queue wait 105.2 ms
-- `q-spsc_sched-pin_net-epoll` run 2: 10240 orders >1 ms, max arrival 2.93 ms, net run-queue wait 114.8 ms
-- `q-spsc_sched-pin_net-epoll` run 3: 9833 orders >1 ms, max arrival 2.90 ms, net run-queue wait 101.9 ms
-- `q-spsc_sched-pin_net-epoll` run 4: 9612 orders >1 ms, max arrival 4.81 ms, net run-queue wait 115.3 ms
-- `q-spsc_sched-pin_net-epoll` run 5: 10400 orders >1 ms, max arrival 2.86 ms, net run-queue wait 124.8 ms
-- `q-spsc_sched-pin_net-epoll` run 6: 6057 orders >1 ms, max arrival 2.94 ms, net run-queue wait 75.5 ms
-- `q-spsc_sched-pin_net-epoll` run 7: 3133 orders >1 ms, max arrival 2.85 ms, net run-queue wait 64.1 ms
-- `q-spsc_sched-pin_net-epoll` run 8: 4416 orders >1 ms, max arrival 2.83 ms, net run-queue wait 69.0 ms
-- `q-spsc_sched-pin_net-epoll` run 9: 8417 orders >1 ms, max arrival 2.95 ms, net run-queue wait 97.2 ms
-- `q-spsc_sched-pin_net-epoll` run 10: 3686 orders >1 ms, max arrival 2.84 ms, net run-queue wait 59.2 ms
-- `q-spsc_sched-pin_net-uring` run 1: 32698 orders >1 ms, max arrival 4.18 ms, net run-queue wait 279.8 ms
-- `q-spsc_sched-pin_net-uring` run 2: 21620 orders >1 ms, max arrival 2.87 ms, net run-queue wait 208.5 ms
-- `q-spsc_sched-pin_net-uring` run 6: 33236 orders >1 ms, max arrival 2.92 ms, net run-queue wait 302.6 ms
-- `q-spsc_sched-pin_net-uring` run 7: 36328 orders >1 ms, max arrival 2.86 ms, net run-queue wait 319.3 ms
-- `q-spsc_sched-pin_net-uring` run 8: 27856 orders >1 ms, max arrival 2.99 ms, net run-queue wait 261.6 ms
-- `q-spsc_sched-pin_net-uring` run 9: 7936 orders >1 ms, max arrival 2.87 ms, net run-queue wait 84.0 ms
+- `alloc-fast-heap` run 10: 64 orders >1 ms, max arrival 2.06 ms, net run-queue wait 7.1 ms
+- `probe-client-free` run 2: 128 orders >1 ms, max arrival 1.62 ms, net run-queue wait 5.7 ms
+- `probe-client-free` run 3: 1472 orders >1 ms, max arrival 2.65 ms, net run-queue wait 20.8 ms
+- `probe-ingest-epoll` run 1: 3776 orders >1 ms, max arrival 2.69 ms, net run-queue wait 50.5 ms
+- `probe-ingest-epoll` run 2: 1920 orders >1 ms, max arrival 2.85 ms, net run-queue wait 34.4 ms
+- `probe-ingest-epoll` run 3: 384 orders >1 ms, max arrival 2.84 ms, net run-queue wait 12.1 ms
+- `probe-net-pinned` run 1: 12804 orders >1 ms, max arrival 2.85 ms, net run-queue wait 122.3 ms
+- `probe-net-pinned` run 2: 10176 orders >1 ms, max arrival 2.97 ms, net run-queue wait 105.5 ms
+- `probe-net-pinned` run 3: 20480 orders >1 ms, max arrival 2.89 ms, net run-queue wait 186.8 ms
+- `q-mutex_sched-default_net-uring` run 2: 1930 orders >1 ms, max arrival 2.86 ms, net run-queue wait 14.3 ms
+- `q-mutex_sched-default_net-uring` run 3: 1536 orders >1 ms, max arrival 2.85 ms, net run-queue wait 13.9 ms
+- `q-mutex_sched-default_net-uring` run 4: 2793 orders >1 ms, max arrival 2.90 ms, net run-queue wait 20.3 ms
+- `q-mutex_sched-default_net-uring` run 5: 7680 orders >1 ms, max arrival 2.97 ms, net run-queue wait 58.5 ms
+- `q-mutex_sched-default_net-uring` run 6: 448 orders >1 ms, max arrival 2.76 ms, net run-queue wait 6.4 ms
+- `q-mutex_sched-default_net-uring` run 10: 448 orders >1 ms, max arrival 2.87 ms, net run-queue wait 4.7 ms
+- `q-mutex_sched-pin_net-epoll` run 1: 961 orders >1 ms, max arrival 1.62 ms, net run-queue wait 8.2 ms
+- `q-mutex_sched-pin_net-epoll` run 2: 704 orders >1 ms, max arrival 2.87 ms, net run-queue wait 16.0 ms
+- `q-mutex_sched-pin_net-epoll` run 3: 3367 orders >1 ms, max arrival 2.76 ms, net run-queue wait 37.7 ms
+- `q-mutex_sched-pin_net-epoll` run 4: 3343 orders >1 ms, max arrival 2.88 ms, net run-queue wait 30.2 ms
+- `q-mutex_sched-pin_net-epoll` run 5: 1088 orders >1 ms, max arrival 2.64 ms, net run-queue wait 23.2 ms
+- `q-mutex_sched-pin_net-epoll` run 6: 2408 orders >1 ms, max arrival 2.88 ms, net run-queue wait 36.9 ms
+- `q-mutex_sched-pin_net-epoll` run 7: 2172 orders >1 ms, max arrival 2.88 ms, net run-queue wait 31.4 ms
+- `q-mutex_sched-pin_net-epoll` run 8: 1920 orders >1 ms, max arrival 2.90 ms, net run-queue wait 22.4 ms
+- `q-mutex_sched-pin_net-epoll` run 9: 3020 orders >1 ms, max arrival 2.67 ms, net run-queue wait 48.3 ms
+- `q-mutex_sched-pin_net-epoll` run 10: 832 orders >1 ms, max arrival 2.65 ms, net run-queue wait 16.1 ms
+- `q-mutex_sched-pin_net-uring` run 3: 772 orders >1 ms, max arrival 2.86 ms, net run-queue wait 11.8 ms
+- `q-mutex_sched-pin_net-uring` run 9: 3072 orders >1 ms, max arrival 2.87 ms, net run-queue wait 30.1 ms
+- `q-mutex_sched-pin_net-uring` run 10: 448 orders >1 ms, max arrival 2.61 ms, net run-queue wait 12.2 ms
+- `q-spsc_sched-default_net-epoll` run 1: 1864 orders >1 ms, max arrival 2.64 ms, net run-queue wait 31.1 ms
+- `q-spsc_sched-default_net-epoll` run 2: 1152 orders >1 ms, max arrival 2.84 ms, net run-queue wait 15.8 ms
+- `q-spsc_sched-default_net-epoll` run 3: 3520 orders >1 ms, max arrival 2.72 ms, net run-queue wait 43.0 ms
+- `q-spsc_sched-default_net-epoll` run 4: 4069 orders >1 ms, max arrival 2.73 ms, net run-queue wait 46.6 ms
+- `q-spsc_sched-default_net-epoll` run 5: 1216 orders >1 ms, max arrival 2.86 ms, net run-queue wait 28.4 ms
+- `q-spsc_sched-default_net-epoll` run 6: 974 orders >1 ms, max arrival 2.39 ms, net run-queue wait 19.9 ms
+- `q-spsc_sched-default_net-epoll` run 7: 3072 orders >1 ms, max arrival 2.91 ms, net run-queue wait 44.9 ms
+- `q-spsc_sched-default_net-epoll` run 8: 512 orders >1 ms, max arrival 2.66 ms, net run-queue wait 14.5 ms
+- `q-spsc_sched-default_net-epoll` run 9: 448 orders >1 ms, max arrival 1.49 ms, net run-queue wait 5.7 ms
+- `q-spsc_sched-default_net-uring` run 5: 1152 orders >1 ms, max arrival 2.85 ms, net run-queue wait 21.0 ms
+- `q-spsc_sched-default_net-uring` run 10: 4224 orders >1 ms, max arrival 2.87 ms, net run-queue wait 44.4 ms
+- `q-spsc_sched-pin_net-epoll` run 1: 3136 orders >1 ms, max arrival 2.98 ms, net run-queue wait 26.5 ms
+- `q-spsc_sched-pin_net-epoll` run 2: 3444 orders >1 ms, max arrival 2.79 ms, net run-queue wait 41.4 ms
+- `q-spsc_sched-pin_net-epoll` run 3: 4416 orders >1 ms, max arrival 2.91 ms, net run-queue wait 34.3 ms
+- `q-spsc_sched-pin_net-epoll` run 4: 2560 orders >1 ms, max arrival 2.50 ms, net run-queue wait 27.3 ms
+- `q-spsc_sched-pin_net-epoll` run 5: 896 orders >1 ms, max arrival 2.70 ms, net run-queue wait 12.7 ms
+- `q-spsc_sched-pin_net-epoll` run 7: 3456 orders >1 ms, max arrival 2.92 ms, net run-queue wait 45.0 ms
+- `q-spsc_sched-pin_net-epoll` run 8: 832 orders >1 ms, max arrival 1.32 ms, net run-queue wait 5.5 ms
+- `q-spsc_sched-pin_net-epoll` run 9: 4719 orders >1 ms, max arrival 2.93 ms, net run-queue wait 55.4 ms
+- `q-spsc_sched-pin_net-epoll` run 10: 3392 orders >1 ms, max arrival 2.83 ms, net run-queue wait 49.3 ms
+- `q-spsc_sched-pin_net-uring` run 1: 2752 orders >1 ms, max arrival 3.01 ms, net run-queue wait 22.7 ms
+- `q-spsc_sched-pin_net-uring` run 2: 8896 orders >1 ms, max arrival 2.88 ms, net run-queue wait 87.7 ms
+- `q-spsc_sched-pin_net-uring` run 3: 7936 orders >1 ms, max arrival 2.87 ms, net run-queue wait 68.1 ms
+- `q-spsc_sched-pin_net-uring` run 4: 6080 orders >1 ms, max arrival 2.86 ms, net run-queue wait 42.9 ms
+- `q-spsc_sched-pin_net-uring` run 5: 9152 orders >1 ms, max arrival 2.88 ms, net run-queue wait 79.3 ms
+- `q-spsc_sched-pin_net-uring` run 6: 9280 orders >1 ms, max arrival 2.87 ms, net run-queue wait 73.7 ms
+- `q-spsc_sched-pin_net-uring` run 7: 10560 orders >1 ms, max arrival 2.89 ms, net run-queue wait 95.3 ms
+- `q-spsc_sched-pin_net-uring` run 8: 6501 orders >1 ms, max arrival 2.86 ms, net run-queue wait 56.9 ms
+- `q-spsc_sched-pin_net-uring` run 9: 5248 orders >1 ms, max arrival 2.87 ms, net run-queue wait 41.6 ms
+- `q-spsc_sched-pin_net-uring` run 10: 8256 orders >1 ms, max arrival 2.89 ms, net run-queue wait 78.4 ms
 
 ## Flagged runs (p99.9 > 1.2× config median)
 
-- `probe-client-free` run 2: p99.9=223.9 µs vs median 153.0 µs
-- `probe-ingest-uring` run 2: p99.9=214.5 µs vs median 173.7 µs
-- `q-mutex_sched-default_net-epoll` run 2: p99.9=649.7 µs vs median 182.9 µs
-- `q-mutex_sched-pin_net-uring` run 2: p99.9=663.7 µs vs median 374.9 µs
-- `q-mutex_sched-pin_net-uring` run 4: p99.9=881.5 µs vs median 374.9 µs
+- `alloc-fast-heap` run 10: p99.9=241.4 µs vs median 152.2 µs
+- `probe-client-free` run 3: p99.9=1.40 ms vs median 387.5 µs
+- `probe-ingest-epoll` run 1: p99.9=1.96 ms vs median 1.60 ms
+- `q-mutex_sched-default_net-epoll` run 8: p99.9=205.0 µs vs median 170.2 µs
+- `q-mutex_sched-default_net-epoll` run 10: p99.9=225.0 µs vs median 170.2 µs
+- `q-mutex_sched-default_net-uring` run 2: p99.9=2.26 ms vs median 563.2 µs
+- `q-mutex_sched-default_net-uring` run 3: p99.9=1.88 ms vs median 563.2 µs
+- `q-mutex_sched-default_net-uring` run 4: p99.9=2.33 ms vs median 563.2 µs
+- `q-mutex_sched-default_net-uring` run 5: p99.9=2.90 ms vs median 563.2 µs
+- `q-mutex_sched-default_net-uring` run 6: p99.9=840.6 µs vs median 563.2 µs
+- `q-mutex_sched-pin_net-uring` run 3: p99.9=1.81 ms vs median 1.21 ms
+- `q-mutex_sched-pin_net-uring` run 9: p99.9=2.57 ms vs median 1.21 ms
+- `q-mutex_sched-pin_net-uring` run 10: p99.9=2.54 ms vs median 1.21 ms
+- `q-spsc_sched-default_net-epoll` run 3: p99.9=1.90 ms vs median 1.34 ms
+- `q-spsc_sched-default_net-epoll` run 4: p99.9=2.20 ms vs median 1.34 ms
+- `q-spsc_sched-default_net-epoll` run 7: p99.9=2.07 ms vs median 1.34 ms
+- `q-spsc_sched-default_net-uring` run 5: p99.9=1.21 ms vs median 151.6 µs
+- `q-spsc_sched-default_net-uring` run 10: p99.9=2.49 ms vs median 151.6 µs
+- `q-spsc_sched-pin_net-epoll` run 9: p99.9=2.44 ms vs median 1.79 ms
+- `q-spsc_sched-pin_net-epoll` run 10: p99.9=2.20 ms vs median 1.79 ms
 
