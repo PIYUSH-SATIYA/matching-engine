@@ -276,10 +276,11 @@ def main() -> int:
     rows = collect(reps, FS_ROW, lambda r: r["name"])
     if rows:
         md.append(md_table(
-            ["layout", "reps", "throughput", "throughput range", "p50", "p99",
-             "p99.9", "max"],
+            ["layout", "reps", "throughput (median)", "throughput (best)",
+             "throughput range", "p50 (median)", "p99", "p99.9", "max"],
             [[name, len(v),
               f'{med([r["rate"] for r in v]):.2f} M/s',
+              f'{max(r["rate"] for r in v):.2f} M/s',
               f'{spread([r["rate"] for r in v])[0]:.2f}–'
               f'{spread([r["rate"] for r in v])[1]:.2f} M/s',
               fmt_ns(med([r["p50"] for r in v])),
@@ -288,6 +289,21 @@ def main() -> int:
               fmt_ns(med([r["max"] for r in v]))]
              for name, v in rows]))
         md.append("")
+        if "padded" in dict(rows) and "packed" in dict(rows):
+            pmax = max(r["rate"] for r in dict(rows)["padded"])
+            kmax = max(r["rate"] for r in dict(rows)["packed"])
+            md.append(f"Best-case throughput: padded {pmax:.2f} M/s, packed "
+                      f"{kmax:.2f} M/s → padded/packed = {pmax / kmax:.2f}×.")
+            md.append("")
+            md.append("Why best-case and not the median: on this desktop host a "
+                      "spin-waiting pair of threads is preempted at unpredictable "
+                      "moments, and preemption can only *subtract* throughput. The "
+                      "medians therefore overlap even when the layouts differ, while "
+                      "the fastest of N identical trials estimates what the layout "
+                      "can do when the host leaves it alone. Both layouts get the "
+                      "same number of trials, so the comparison is fair, but it is "
+                      "an upper-bound comparison, not a typical-case one.")
+            md.append("")
         ratio = next((line.strip() for lines in reps for line in lines
                       if line.strip().startswith("padded_vs_packed_throughput=")),
                      None)
