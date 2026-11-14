@@ -136,6 +136,13 @@ add_executable(bench_pipeline
 target_include_directories(bench_pipeline PRIVATE include)
 target_link_libraries(bench_pipeline PRIVATE Threads::Threads)
 
+add_executable(bench_allocator bench/bench_allocator.cpp)
+target_include_directories(bench_allocator PRIVATE include)
+
+add_executable(bench_false_sharing bench/bench_false_sharing.cpp)
+target_include_directories(bench_false_sharing PRIVATE include)
+target_link_libraries(bench_false_sharing PRIVATE Threads::Threads)
+
 add_executable(load_client tools/load_client.cpp)
 target_include_directories(load_client PRIVATE include)
 

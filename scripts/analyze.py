@@ -34,6 +34,7 @@ NUMERIC = [
     "net_user_s", "net_sys_s", "spsc_yields", "net_ingest_slow",
     "net_ingest_max_ns", "engine_runq_ns", "net_runq_ns",
     "arr_p50", "arr_p99", "arr_p999", "svc_p50", "svc_p99", "svc_p999",
+    "p95", "offered_rate", "queue_full_waits", "queue_empty_waits",
 ]
 
 
@@ -72,12 +73,14 @@ def summary_for(rows: list[dict]) -> dict:
         return [r[key] for r in clean]
 
     measured = median(col("measured"))
+    duration = median(col("duration_s"))
     cpu_s = median([r["user_s"] + r["sys_s"] for r in rows])
     net_cpu_s = median([r["net_user_s"] + r["net_sys_s"] for r in rows])
     return {
         "runs": len(rows),
         "clean_runs": len(clean),
         "p50_clean": median(ccol("p50")),
+        "p95_clean": median(ccol("p95")),
         "p999_clean": median(ccol("p999")),
         "arr_p999_clean": median(ccol("arr_p999")),
         "svc_p999_clean": median(ccol("svc_p999")),
@@ -86,9 +89,18 @@ def summary_for(rows: list[dict]) -> dict:
         "throughput": median(col("throughput")),
         "p50": median(col("p50")),
         "p90": median(col("p90")),
+        "p95": median(col("p95")),
         "p99": median(col("p99")),
         "p999": median(col("p999")),
         "max": median(col("max")),
+        "offered_rate": median(col("offered_rate")),
+        "queue_full_waits": median(col("queue_full_waits")),
+        "queue_empty_waits": median(col("queue_empty_waits")),
+        "duration_s": duration,
+        "engine_cpu_pct": (100.0 * cpu_s / duration) if duration else 0.0,
+        "net_cpu_pct": (100.0 * net_cpu_s / duration) if duration else 0.0,
+        "p999_over_p50": (median(col("p999")) / median(col("p50")))
+                         if median(col("p50")) else 0.0,
         "p999_min": min(col("p999")) if rows else 0,
         "p999_max": max(col("p999")) if rows else 0,
         "trades": median(col("trades")),
@@ -121,6 +133,14 @@ def summary_for(rows: list[dict]) -> dict:
 
 
 def short_name(config: str) -> str:
+    if config.startswith("sat-"):
+        # sat-<queue>-rate-<rate> or sat-<queue>-unthrottled
+        parts = config.split("-")
+        if len(parts) >= 4 and parts[2] == "rate":
+            return f"{parts[1]} / {fmt_rate(float(parts[3]))}"
+        if len(parts) >= 3:
+            return f"{parts[1]} / {parts[2]}"
+        return config
     if config.startswith("q-"):
         parts = config[2:].split("_")
         q = parts[0].replace("q-", "").replace("queue-", "")
@@ -244,10 +264,11 @@ def svg_cdf(title: str, series: list[tuple[str, list[int]]], out: Path) -> None:
 
 
 def svg_hbars(title: str, items: list[tuple[str, float]], out: Path,
-              fmt, note: str) -> None:
+              fmt, note: str, sort: bool = True) -> None:
     if not items:
         return
-    items = sorted(items, key=lambda kv: kv[1], reverse=True)
+    if sort:
+        items = sorted(items, key=lambda kv: kv[1], reverse=True)
     row_h = 30
     width = 980
     height = 90 + row_h * len(items)
@@ -291,24 +312,26 @@ def main() -> int:
 
     # ---- summary.csv -------------------------------------------------------
     fields = ["config", "kind", "runs", "measured", "throughput", "p50", "p90",
-              "p99", "p999", "p999_min", "p999_max", "max", "p999_over_p50",
-              "cpu_us_per_order", "net_cpu_us_per_order", "nvcsw", "nivcsw",
+              "p95", "p99", "p999", "p999_min", "p999_max", "max", "p999_over_p50",
+              "cpu_us_per_order", "net_cpu_us_per_order", "engine_cpu_pct",
+              "net_cpu_pct", "nvcsw", "nivcsw",
               "net_nvcsw", "net_nivcsw", "kernel_ops", "spsc_yields", "user_s",
               "sys_s", "accepted", "rejected", "invalid", "trades",
               "traded_qty", "traded_notional", "ingest_slow", "ingest_max_ns",
               "engine_runq_s", "net_runq_s", "arr_p50", "arr_p99", "arr_p999",
-              "svc_p50", "svc_p99", "svc_p999"]
+              "svc_p50", "svc_p99", "svc_p999", "offered_rate",
+              "queue_full_waits", "queue_empty_waits"]
     with (RESULTS / "summary.csv").open("w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=fields)
         writer.writeheader()
         for (config, kind) in sorted(groups):
             s = summaries[f"{config}|{kind}"]
             row = {"config": config, "kind": kind, **s}
-            row["p999_over_p50"] = (s["p999"] / s["p50"]) if s["p50"] else 0.0
             writer.writerow({k: row[k] for k in fields})
 
     latency = [(c, summaries[f"{c}|{k}"]) for (c, k) in groups if k == "latency"]
     throughput = [(c, summaries[f"{c}|{k}"]) for (c, k) in groups if k == "throughput"]
+    saturation = [(c, summaries[f"{c}|{k}"]) for (c, k) in groups if k == "saturation"]
     main_latency = [(c, s) for c, s in latency if not c.startswith("probe-")]
     probe_latency = [(c, s) for c, s in latency if c.startswith("probe-")]
 
@@ -325,6 +348,8 @@ def main() -> int:
     # ---- checksums ---------------------------------------------------------
     checksum_groups = defaultdict(set)
     for row in rows:
+        if row["kind"] == "saturation":
+            continue  # different order counts per rate by design
         checksum_groups[row["kind"]].add(
             (int(row["orders"]), int(row["warmup"]), int(row["trades"]),
              int(row["traded_qty"]), int(row["traded_notional"]))
@@ -341,14 +366,15 @@ def main() -> int:
     md.append("## Latency runs (200k orders/s, 10k warmup)")
     md.append("")
     md.append(md_table(
-        ["config", "runs", "clean runs", "p50", "p90", "p99", "p99.9",
-         "p99.9 (clean)", "p99.9 range", "max", "kernel ops/run",
-         "engine run-queue wait", "net run-queue wait"],
+        ["config", "runs", "clean runs", "p50", "p90", "p95", "p99", "p99.9",
+         "p99.9 (clean)", "p99.9 range", "max", "engine CPU %",
+         "kernel ops/run", "engine run-queue wait", "net run-queue wait"],
         [[short_name(c), s["runs"], s["clean_runs"], fmt_ns(s["p50"]),
-          fmt_ns(s["p90"]), fmt_ns(s["p99"]), fmt_ns(s["p999"]),
+          fmt_ns(s["p90"]), fmt_ns(s["p95"]), fmt_ns(s["p99"]), fmt_ns(s["p999"]),
           fmt_ns(s["p999_clean"]) if s["clean_runs"] else "–",
           f'{fmt_ns(s["p999_min"])}–{fmt_ns(s["p999_max"])}',
-          fmt_ns(s["max"]), f'{s["kernel_ops"]:.0f}',
+          fmt_ns(s["max"]), f'{s["engine_cpu_pct"]:.0f}%',
+          f'{s["kernel_ops"]:.0f}',
           f'{s["engine_runq_s"] * 1e3:.2f} ms',
           f'{s["net_runq_s"] * 1e3:.2f} ms'] for c, s in sorted(main_latency)]))
     md.append("")
@@ -404,6 +430,43 @@ def main() -> int:
           f'{s["nivcsw"]:.0f}', f'{s["net_nvcsw"]:.0f}',
           f'{s["kernel_ops"]:.0f}', f'{s["spsc_yields"]:.0f}']
          for c, s in sorted(throughput, key=lambda kv: -kv[1]["throughput"])]))
+    md.append("")
+    md.append("## Queue saturation sweep (proposal Experiment 5)")
+    md.append("")
+    md.append("Fixed offered rate from the client, `kind=saturation`, so these runs are "
+              "not mixed into the latency/throughput tables above. The sweep pushes the "
+              "offered rate past each queue's service rate and records how many blocking "
+              "push/pop calls occurred. A full or empty count above zero means the queue "
+              "stopped absorbing the burst and the producer/consumer had to wait; the "
+              "achieved rate plateaus at the service rate even as the offered rate rises.")
+    md.append("")
+    if saturation:
+        sat_sorted = sorted(saturation, key=lambda kv: (kv[0].split("-")[1],
+                                                        kv[1]["offered_rate"] or math.inf))
+        md.append(md_table(
+            ["queue / offered rate", "runs", "achieved orders/s", "p50", "p95",
+             "p99", "p99.9", "max", "full waits", "empty waits",
+             "engine CPU %"],
+            [[short_name(c), s["runs"], fmt_rate(s["throughput"]),
+              fmt_ns(s["p50"]), fmt_ns(s["p95"]), fmt_ns(s["p99"]),
+              fmt_ns(s["p999"]), fmt_ns(s["max"]),
+              f'{s["queue_full_waits"]:.0f}', f'{s["queue_empty_waits"]:.0f}',
+              f'{s["engine_cpu_pct"]:.0f}%'] for c, s in sat_sorted]))
+    else:
+        md.append("- not run")
+    md.append("")
+    md.append("## Queue blocking counts (200k orders/s latency runs)")
+    md.append("")
+    md.append("Same counters at the normal 200k orders/s open-loop rate: how often the "
+              "queue had nothing to hand over (`empty`) or no room (`full`). Medians "
+              "across runs; a blocking queue and a spinning queue pay different costs "
+              "for the same count.")
+    md.append("")
+    md.append(md_table(
+        ["config", "full waits", "empty waits", "engine CPU %", "net CPU %"],
+        [[short_name(c), f'{s["queue_full_waits"]:.0f}',
+          f'{s["queue_empty_waits"]:.0f}', f'{s["engine_cpu_pct"]:.0f}%',
+          f'{s["net_cpu_pct"]:.0f}%'] for c, s in sorted(main_latency)]))
     md.append("")
     md.append("## Component views")
     md.append("")
@@ -533,6 +596,17 @@ def main() -> int:
     svg_hbars("p99.9 latency by configuration (median)", lat_items,
               PLOTS / "bar-p999.svg", fmt_ns,
               "Open-loop 200k orders/s, 1.01M orders, client-send to engine-complete.")
+    if saturation:
+        sat_items = [(short_name(c), s["p999"]) for c, s in saturation]
+        svg_hbars("p99.9 vs offered rate (saturation sweep, median)", sat_items,
+                  PLOTS / "bar-saturation-p999.svg", fmt_ns,
+                  "Offered rate climbs left to right; p99.9 rises once the queue fills.",
+                  sort=False)
+        sat_thr = [(short_name(c), s["throughput"]) for c, s in saturation]
+        svg_hbars("Achieved throughput vs offered rate (median)", sat_thr,
+                  PLOTS / "bar-saturation-throughput.svg", fmt_rate,
+                  "Offered rate climbs left to right; achieved rate plateaus at the service rate.",
+                  sort=False)
 
     # ---- machine-readable --------------------------------------------------
     out = {

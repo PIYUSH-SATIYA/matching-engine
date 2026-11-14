@@ -7,7 +7,10 @@ void RingBuffer::push(const Order &ord) {
   std::unique_lock<std::mutex> lock(mtx);
 
   // sleep while the buffer is full
-  not_full.wait(lock, [this] { return count < CAPACITY; });
+  if (count == CAPACITY) {
+    waits_full_.fetch_add(1, std::memory_order_relaxed);
+    not_full.wait(lock, [this] { return count < CAPACITY; });
+  }
 
   buffer[tail] = ord;
   tail = (tail + 1) % CAPACITY;
@@ -23,7 +26,10 @@ Order RingBuffer::pop() {
   std::unique_lock<std::mutex> lock(mtx);
 
   // sleep while the buffer is empty.
-  not_empty.wait(lock, [this] { return count > 0; });
+  if (count == 0) {
+    waits_empty_.fetch_add(1, std::memory_order_relaxed);
+    not_empty.wait(lock, [this] { return count > 0; });
+  }
 
   Order ord = buffer[head];
 

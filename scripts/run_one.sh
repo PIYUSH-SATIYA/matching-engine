@@ -48,6 +48,7 @@ CLIENT_LOG="$DIR/run-$RUN.client.log"
 SERVER_ARGS=(--port "$PORT" --queue "$QUEUE" --book "$BOOK" --net "$NET"
              --sched "$SCHED" --warmup "$WARMUP" --stats "$CSV"
              --config "$CONFIG" --run "$RUN" --kind "$KIND"
+             --offered-rate "$RATE"
              --exit-on-disconnect)
 if [ "$SCHED" != "default" ]; then
   SERVER_ARGS+=(--cpu-engine "$CPU_ENGINE")
@@ -115,4 +116,4 @@ if [ "$ROWS_AFTER" -le "$ROWS_BEFORE" ]; then
 fi
 
 LOAD1=$(cut -d' ' -f1 /proc/loadavg)
-awk -F, -v c="$CONFIG" -v r="$RUN" -v load1="$LOAD1" '$1==c && $2==r {printf "[%s run %s] throughput=%s/s p50=%s p99=%s p99.9=%s trades=%s wall=%.2fs load1=%s runq=%sms\n",$1,$2,$12,$13,$15,$16,$8,'"$end"' - '"$start"',$35/1e6,load1}' "$CSV" | tail -1
+awk -F, -v c="$CONFIG" -v r="$RUN" -v load1="$LOAD1" '$1==c && $2==r {printf "[%s run %s] throughput=%s/s p50=%s p95=%s p99=%s p99.9=%s trades=%s wall=%.2fs load1=%s runq=%sms qfull=%s qempty=%s\n",$1,$2,$12,$13,$43,$15,$16,$8,'"$end"' - '"$start"',$35/1e6,load1,$45,$46}' "$CSV" | tail -1

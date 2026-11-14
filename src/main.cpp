@@ -45,6 +45,9 @@ struct Options {
     int cpu_engine = -1;
     int run = 0;
     std::size_t warmup = 0;
+    // Offered rate of the client, only for the record: the server cannot see
+    // the pacer.  Needed because the saturation sweep varies it.
+    double offered_rate = 0.0;
     const char* samples_path = nullptr;
     const char* stats_path = nullptr;
     const char* log_path = nullptr;
@@ -90,6 +93,7 @@ static void writeStats(const Options& opt, std::uint64_t seen,
                        double throughput, const std::vector<std::uint64_t>& sorted,
                        const std::vector<std::uint64_t>& arr_sorted,
                        const std::vector<std::uint64_t>& svc_sorted,
+                       std::uint64_t q_full_waits, std::uint64_t q_empty_waits,
                        const EngineStats& es, const EngineStats& net_es) {
     if (!opt.stats_path) return;
     FILE* f = std::fopen(opt.stats_path, "a");
@@ -105,7 +109,8 @@ static void writeStats(const Options& opt, std::uint64_t seen,
                      "kernel_ops,traded_qty,traded_notional,net_nvcsw,net_nivcsw,"
                      "net_user_s,net_sys_s,spsc_yields,net_ingest_slow,"
                      "net_ingest_max_ns,engine_runq_ns,net_runq_ns,"
-                     "arr_p50,arr_p99,arr_p999,svc_p50,svc_p99,svc_p999\n");
+                     "arr_p50,arr_p99,arr_p999,svc_p50,svc_p99,svc_p999,"
+                     "p95,offered_rate,queue_full_waits,queue_empty_waits\n");
     }
     const auto p = [&](double q) {
         return static_cast<unsigned long long>(
@@ -123,7 +128,8 @@ static void writeStats(const Options& opt, std::uint64_t seen,
         f,
         "%s,%d,%s,%llu,%zu,%llu,%llu,%llu,%llu,%llu,%.6f,%.0f,%llu,%llu,%llu,"
         "%llu,%llu,%llu,%llu,%llu,%llu,%.6f,%.6f,%llu,%llu,%llu,%llu,%llu,%llu,"
-        "%.6f,%.6f,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu\n",
+        "%.6f,%.6f,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,"
+        "%llu,%.6f,%llu,%llu\n",
         opt.config.c_str(), opt.run, opt.kind.c_str(),
         static_cast<unsigned long long>(seen), opt.warmup,
         static_cast<unsigned long long>(measured),
@@ -159,7 +165,10 @@ static void writeStats(const Options& opt, std::uint64_t seen,
         static_cast<unsigned long long>(
             LatencyRecorder::percentile(svc_sorted, 0.99)),
         static_cast<unsigned long long>(
-            LatencyRecorder::percentile(svc_sorted, 0.999)));
+            LatencyRecorder::percentile(svc_sorted, 0.999)),
+        p(0.95), opt.offered_rate,
+        static_cast<unsigned long long>(q_full_waits),
+        static_cast<unsigned long long>(q_empty_waits));
     std::fclose(f);
 }
 
@@ -191,8 +200,21 @@ int runApp(const Options& opt) {
     }
 
     CountingSink counting;
+    // --log routes events through the EventManager, which is the flow the
+    // component contract specifies (engine -> EventManager -> logger).  The
+    // benchmark counter stays a direct sink because it also consumes Trade
+    // objects, and the EngineEvent stream does not carry a Trade.  Measured
+    // runs (no --log) use CountingSink alone, so the indirection costs nothing
+    // where latency is being measured.
+    std::unique_ptr<EventManager> events;
     std::unique_ptr<TradeLogSink> tlog;
-    if (opt.log_path) tlog = std::make_unique<TradeLogSink>(1u << 20);
+    if (opt.log_path) {
+        tlog = std::make_unique<TradeLogSink>(1u << 20);
+        events = std::make_unique<EventManager>();
+        TradeLogSink* log = tlog.get();
+        events->registerListener(
+            [log](const EngineEvent& e) { log->onEvent(e); });
+    }
 
     LatencyRecorder latency(4'000'000, opt.warmup);
     // Same samples split into their two components: arrival (client send ->
@@ -277,8 +299,9 @@ int runApp(const Options& opt) {
             }
         };
 
-        if (tlog) {
-            TeeSink<CountingSink, TradeLogSink> tee(counting, *tlog);
+        if (events) {
+            EventManagerSink ems(*events);
+            TeeSink<CountingSink, EventManagerSink> tee(counting, ems);
             MatchingEngine<Book, decltype(tee)> engine(*book, tee);
             loop(engine);
         } else {
@@ -352,17 +375,19 @@ int runApp(const Options& opt) {
     const auto arr_sorted = arrival.sorted();
     const auto svc_sorted = service.sorted();
     writeStats(opt, seen, counting, net, measured, duration_s, throughput, sorted,
-               arr_sorted, svc_sorted, es, net_es);
+               arr_sorted, svc_sorted, queue->fullWaits(), queue->emptyWaits(),
+               es, net_es);
 
     std::printf(
         "\n=== %s run=%d ===\n"
         "orders=%llu warmup=%zu measured=%llu accepted=%llu trades=%llu "
         "rejected=%llu invalid=%llu\n"
         "throughput=%.0f/s duration=%.6fs\n"
-        "p50=%llu p90=%llu p99=%llu p99.9=%llu max=%llu ns\n"
+        "p50=%llu p90=%llu p95=%llu p99=%llu p99.9=%llu max=%llu ns\n"
         "minflt=%llu majflt=%llu nvcsw=%llu nivcsw=%llu user=%.3fs sys=%.3fs "
         "migrations=%llu kernel_ops=%llu runq=%.3fms\n"
         "net: nvcsw=%llu nivcsw=%llu user=%.3fs sys=%.3fs runq=%.3fms\n"
+        "queue: full_waits=%llu empty_waits=%llu offered_rate=%.0f/s\n"
         "split: arrival p50=%llu p99=%llu p99.9=%llu | service p50=%llu "
         "p99=%llu p99.9=%llu ns\n",
         opt.config.c_str(), opt.run,
@@ -376,6 +401,8 @@ int runApp(const Options& opt) {
             LatencyRecorder::percentile(sorted, 0.50)),
         static_cast<unsigned long long>(
             LatencyRecorder::percentile(sorted, 0.90)),
+        static_cast<unsigned long long>(
+            LatencyRecorder::percentile(sorted, 0.95)),
         static_cast<unsigned long long>(
             LatencyRecorder::percentile(sorted, 0.99)),
         static_cast<unsigned long long>(
@@ -395,6 +422,8 @@ int runApp(const Options& opt) {
         static_cast<unsigned long long>(net_es.nvcsw),
         static_cast<unsigned long long>(net_es.nivcsw), net_es.user_s,
         net_es.sys_s, static_cast<double>(net_es.runq_ns) / 1e6,
+        static_cast<unsigned long long>(queue->fullWaits()),
+        static_cast<unsigned long long>(queue->emptyWaits()), opt.offered_rate,
         static_cast<unsigned long long>(LatencyRecorder::percentile(arr_sorted, 0.50)),
         static_cast<unsigned long long>(LatencyRecorder::percentile(arr_sorted, 0.99)),
         static_cast<unsigned long long>(LatencyRecorder::percentile(arr_sorted, 0.999)),
@@ -437,7 +466,8 @@ static void usage(const char* argv0) {
         "  --stats PATH       append one CSV row per run\n"
         "  --config NAME      config label for the CSV\n"
         "  --run N            run number for the CSV\n"
-        "  --kind NAME        latency|throughput label\n"
+        "  --kind NAME        latency|throughput|saturation label\n"
+        "  --offered-rate N   client order rate in orders/s (recorded only)\n"
         "  --count-migrations sample sched_getcpu (adds overhead)\n"
         "  --exit-on-disconnect stop after the last client disconnects\n"
         "  --log PATH         write a trade log\n",
@@ -480,6 +510,8 @@ int main(int argc, char** argv) {
             if (const char* v = next()) opt.run = std::atoi(v);
         } else if (std::strcmp(a, "--kind") == 0) {
             if (const char* v = next()) opt.kind = v;
+        } else if (std::strcmp(a, "--offered-rate") == 0) {
+            if (const char* v = next()) opt.offered_rate = std::strtod(v, nullptr);
         } else if (std::strcmp(a, "--log") == 0) {
             opt.log_path = next();
         } else if (std::strcmp(a, "--count-migrations") == 0) {

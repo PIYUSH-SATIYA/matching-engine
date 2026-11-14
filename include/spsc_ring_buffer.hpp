@@ -57,6 +57,21 @@ class SpscRingBuffer {
   // Useful for explaining busy-wait cost in the benchmark report.
   static inline std::atomic<std::uint64_t> g_yields{0};
 
+  // Queue-full / queue-empty events, counted once per blocking call that
+  // actually had to wait (not once per spin).  These are the counters the
+  // "queue saturation" experiment needs: at a low offered rate they stay at
+  // ~0, and as the producer outruns the consumer they become the number of
+  // orders that could not be handed over immediately.
+  static inline std::atomic<std::uint64_t> g_full_waits{0};
+  static inline std::atomic<std::uint64_t> g_empty_waits{0};
+
+  static std::uint64_t fullWaits() noexcept {
+    return g_full_waits.load(std::memory_order_relaxed);
+  }
+  static std::uint64_t emptyWaits() noexcept {
+    return g_empty_waits.load(std::memory_order_relaxed);
+  }
+
   // ---- producer thread only ------------------------------------------
   bool try_push(const Order& o) noexcept {
     const std::size_t t = tail_.load(std::memory_order_relaxed);
@@ -70,6 +85,8 @@ class SpscRingBuffer {
   }
 
   void push(const Order& o) noexcept {
+    if (try_push(o)) return;
+    g_full_waits.fetch_add(1, std::memory_order_relaxed);
     for (unsigned spins = 0; !try_push(o); ++spins) wait_hint(spins);
   }
 
@@ -87,6 +104,8 @@ class SpscRingBuffer {
 
   Order pop() noexcept {
     Order o;
+    if (try_pop(o)) return o;
+    g_empty_waits.fetch_add(1, std::memory_order_relaxed);
     for (unsigned spins = 0; !try_pop(o); ++spins) wait_hint(spins);
     return o;
   }
