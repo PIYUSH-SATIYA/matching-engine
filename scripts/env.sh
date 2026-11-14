@@ -33,6 +33,37 @@ OUT="$RESULTS/env.txt"
     echo "smt/active=$(cat /sys/devices/system/cpu/smt/active)"
   echo "cmdline=$(cat /proc/cmdline)"
   echo
+  echo "## Platform power profile / DVFS"
+  # On laptops the firmware power profile changes EPP, power limits and the
+  # frequency floor.  Numbers from different profiles are not comparable, so
+  # record it next to the governor.
+  if [ -r /sys/firmware/acpi/platform_profile ]; then
+    echo "platform_profile=$(cat /sys/firmware/acpi/platform_profile)"
+    echo "platform_profile_choices=$(cat /sys/firmware/acpi/platform_profile_choices 2>/dev/null || echo n/a)"
+  else
+    echo "platform_profile=n/a"
+  fi
+  if command -v powerprofilesctl >/dev/null 2>&1; then
+    echo "powerprofilesctl=$(powerprofilesctl get 2>/dev/null || echo n/a)"
+  else
+    echo "powerprofilesctl=missing"
+  fi
+  if [ -r /sys/class/power_supply/AC/online ] || [ -r /sys/class/power_supply/ACAD/online ]; then
+    echo "ac_online=$(cat /sys/class/power_supply/ACAD/online 2>/dev/null || cat /sys/class/power_supply/AC/online 2>/dev/null)"
+  fi
+  [ -r /sys/devices/system/cpu/cpufreq/boost ] &&
+    echo "cpufreq/boost=$(cat /sys/devices/system/cpu/cpufreq/boost)"
+  for cpu in /sys/devices/system/cpu/cpu[0-9]*; do
+    [ -r "$cpu/cpufreq/energy_performance_preference" ] || continue
+    echo "$(basename "$cpu") epp=$(cat "$cpu/cpufreq/energy_performance_preference") cur_khz=$(cat "$cpu/cpufreq/scaling_cur_freq" 2>/dev/null || echo n/a)"
+  done
+  echo
+  echo "## Thermal snapshot"
+  for zone in /sys/class/thermal/thermal_zone*; do
+    [ -r "$zone/temp" ] || continue
+    echo "$(cat "$zone/type" 2>/dev/null || basename "$zone") = $(cat "$zone/temp")mC"
+  done
+  echo
   echo "## Privileges / limits"
   echo "uid=$(id -u) user=$(id -un)"
   echo "rtprio_limit=$(ulimit -r)"

@@ -5,6 +5,10 @@ compile_commands.json
 .cache/
 build*/
 results/raw/
+results/raw-prev-*/
+results/components-prev-*/
+results/bench-session-*.log
+results/thermal-*.csv
 results/plots/*.svg
 results/summary.csv
 results/analysis.json
