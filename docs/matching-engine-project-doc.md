@@ -40,7 +40,7 @@ Four results carry the report:
    Measured in isolation, the optimized book matches or rests an order in
    **94 ns (p50)** and **374 ns (p99.9)**; producer→queue→engine with no network
    is **299 ns (p50)** and **13.2 µs (p99.9)**. The full TCP pipeline is
-   **25.0 µs (p50)** and **86.8 µs (p99.9)**, of which the arrival stage
+   **25.0 µs (p50)** and **85.6 µs (p99.9)**, of which the arrival stage
    (client send → network thread parse) accounts for **51–74 %** of the p99.9.
    At the median the engine's share is ~3 µs, so **86–88 % of typical latency is
    ingress and wake-up**, not matching.
@@ -73,7 +73,7 @@ Four results carry the report:
 
 Affinity without isolation did not help: pinning the engine cut its run-queue
 wait from 2.20 ms to 0.22 ms, but the end-to-end p99.9 improvement
-(127.7 → 86.8 µs) is not statistically significant at n = 10 (p = 0.14).
+(127.7 → 85.6 µs) is not statistically significant at n = 10 (p = 0.14).
 `SCHED_FIFO` was denied by host policy, so the realtime arm is a documented null
 result. A controlled confinement experiment (Section 6.12) shows that the
 multi-millisecond outliers seen under desktop contention are host ingress delay,
@@ -494,7 +494,7 @@ and not at p50**:
 | p99, default / epoll | 38.9 µs | 71.7 µs | **0.0009** |
 | p99, pin / epoll | 38.3 µs | 70.9 µs | **0.0017** |
 | service p99.9, pin / epoll | 20.7 µs | 42.0 µs | **0.0007** |
-| total p99.9, pin / epoll | 86.8 µs | 105.3 µs | 0.14 — not distinguishable |
+| total p99.9, pin / epoll (clean) | 86.8 µs | 105.3 µs | 0.14 — not distinguishable |
 
 **Mechanism.** At p50 the two queues are the same because at 200 000 orders/s
 the queue is almost never empty; both hand off in nanoseconds. The difference
@@ -587,7 +587,7 @@ queue types:
   (range 0.08–154 ms) is the accumulation of ~17 000 voluntary sleeps over the
   run, not a stall: its median latency stays at 27 µs.
 
-Pinning improved the p99.9 from 127.7 to 86.8 µs, a 32 % reduction that does
+Pinning improved the p99.9 from 127.7 to 85.6 µs, a 33 % reduction that does
 **not** reach significance at n = 10 (p = 0.14), because the network thread still
 floats and it is the component that absorbs host interference. The expected
 benefit requires `isolcpus`/cgroup cpuset isolation, which we could not apply.
@@ -780,7 +780,7 @@ rather than assumed away. The same binary and configuration
 |---|---|---|---|---|---|
 | competing desktop process free on all 12 CPUs (n = 3) | 26.0 µs | 1046 µs | **2400 µs** | 97.7 ms | 10 017 |
 | that process confined to the E-cores (n = 3) | 22.5 µs | 68 µs | **142 µs** | 1.2 ms | 0 |
-| quiet host, `platform_profile=performance` (matrix row, 9/10 clean) | 25.2 µs | 37.6 µs | **86.8 µs** | 0.5 ms | 0 |
+| quiet host, `platform_profile=performance` (matrix row) | 25.0 µs | 37.6 µs | **85.6 µs** | 0.5 ms | 0 |
 
 The confinement half of the first experiment used a shell `trap` to restore
 affinity; no process was killed, reniced or stopped, and both halves ran while

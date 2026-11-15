@@ -165,7 +165,7 @@ Limitations that matter when reading the numbers:
   submission / completion counters.
 - SMT is enabled and `isolcpus` is not used, so a pinned thread still shares its core
   with whatever else the host schedules there. Pinning the engine cut its run-queue
-  wait from 2.20 ms to 0.22 ms but improved p99.9 only from 127.7 to 86.8 µs, which
+  wait from 2.20 ms to 0.22 ms but improved p99.9 only from 127.7 to 85.6 µs, which
   is not statistically significant at n = 10 (p = 0.14).
 - The network thread is left floating by default. The probe that pins it to one core
   raised p99.9 from 51.5 to 127.5 µs; a confined thread cannot migrate away from
