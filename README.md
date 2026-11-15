@@ -8,6 +8,16 @@ The project is an operating-systems experiment: hold the matching logic fixed an
 change one OS mechanism at a time (synchronization, memory allocation, CPU
 scheduling, I/O), then measure the latency distribution.
 
+**Results:** see [`docs/matching-engine-project-doc.md`](docs/matching-engine-project-doc.md)
+for the full report and [`results/summary.md`](results/summary.md) for the generated
+tables. Headline, at 200 k orders/s on this host: the two queues have the same
+median latency (~25 µs, p = 0.14), but the SPSC pipeline has **half the p99**
+(37.6 vs 70.9 µs, p = 0.001) and **one third the matching-side p99.9**
+(20.7 vs 68.6 µs), sustains **5.86 M/s** unthrottled against 3.34 M/s, and absorbs
+the client's maximum offered rate (6.40 M/s) with zero full-queue waits while the
+mutex path collapses to 3.3 M/s in 2 of 3 runs at that rate. The matching step
+itself is ~94 ns; 86–88 % of the median is TCP ingress and wake-up.
+
 ## Architecture
 
 ```
@@ -70,13 +80,30 @@ one CSV row per run.
 
 ## Reproduce the experiments
 
+The whole measurement chain (environment capture, Release rebuild, five phases, both
+analyses, thermal sampling, ~16 minutes) is one command:
+
 ```bash
-scripts/env.sh                 # results/env.txt
-scripts/run_matrix.sh          # 2 queues × 2 scheduling × 2 networks, 10 latency runs + 5 throughput runs each
-scripts/run_experiments.sh     # allocator isolation (slab/heap/V1) + SCHED_FIFO probe
-scripts/run_components.sh      # no-network floors: single-threaded book, queue+engine pipeline
+./scripts/run_session.sh
+```
+
+It refuses to start on a dirty tree, sets the platform profile to `performance`,
+preserves the previous session's data, and writes a transcript to
+`results/bench-session-<ts>.log`. Run it from a TTY with no graphical session
+active and leave the machine alone while it runs; that is the condition the
+reported numbers were collected under.
+
+Individual phases:
+
+```bash
+scripts/env.sh                 # results/env.txt (host, power profile, EPP, thermal state)
+scripts/run_matrix.sh          # 2 queues × 2 scheduling × 2 networks, 10 latency + 5 throughput runs each
+scripts/run_experiments.sh     # allocator variants (slab/heap/V1) + SCHED_FIFO probe
+scripts/run_saturation.sh      # 2 queues × 9 offered rates (50k … 6.4M/s, unthrottled)
+scripts/run_components.sh      # no-network floors + allocator isolation + false sharing
 scripts/run_probe.sh           # ingress attribution + client/network pinning probes
 scripts/analyze.py             # results/summary.csv, summary.md, analysis.json, plots/*.svg
+scripts/analyze_components.py  # results/components-summary.md
 ```
 
 Useful overrides:
@@ -90,6 +117,9 @@ Useful overrides:
 | `ME_LAT_RATE` | `200000` | open-loop offered rate (orders/s) |
 | `ME_THR_RUNS` | `5` | throughput repetitions |
 | `ME_THR_ORDERS` | `2000000` | orders per throughput run |
+| `ME_SAT_REPS` | `3` | repetitions per saturation rate |
+| `ME_COMPONENT_REPS` | `9` | repetitions per component benchmark |
+| `ME_PROBE_REPS` | `3` | repetitions per probe |
 | `ME_CPU_ENGINE` | `2` | engine core for `--sched pin` |
 | `ME_CPU_CLIENT` | `6` | client core |
 | `ME_PIN_NET` | `0` | set to `1` to also pin the network thread |
@@ -114,40 +144,54 @@ runs are skipped, so an interrupted matrix resumes.
 | `--stats` | path | append one CSV row per run |
 | `--exit-on-disconnect` | flag | stop after the last client disconnects |
 
-## Measurement caveats
+## Measurement conditions and caveats
 
-The results in `docs/matching-engine-project-doc.md` were collected on the host
-described in `results/env.txt`. Important limitations:
+The reported numbers were collected on the host described in `results/env.txt`: Intel
+i5-12450HX, kernel 7.2.9-arch1-1, GCC 16.2.1, `platform_profile=performance`
+(`EPP=performance` on all CPUs), on AC, from a TTY with no graphical session,
+`loadavg` 0.21 at start. Package temperature stayed at 47–71 °C with the P-cores at
+4.37–4.42 GHz, so no run was thermally throttled.
 
-- The CPU governor is `powersave` and turbo is enabled; the benchmark cannot change
-  them without root.
-- `SCHED_FIFO` is denied to the benchmark user (`CAP_SYS_NICE` unavailable). The RT
-  configuration is reported as blocked, not fabricated.
+Limitations that matter when reading the numbers:
+
+- The CPU governor is still `powersave` and turbo is enabled; the benchmark cannot
+  change them without root. Clocks varied 0.8–4.4 GHz between runs, so ratios are
+  more portable than absolute values.
+- `SCHED_FIFO` is denied to the benchmark user (`rtprio_limit=0`, no `CAP_SYS_NICE`).
+  The RT configuration is reported as blocked, not fabricated.
 - `perf` and `strace` are unavailable (`perf_event_paranoid=2`), so mechanism
   evidence comes from in-process counters: `getrusage(RUSAGE_THREAD)` for context
   switches and CPU time, `sched_getcpu()` for migrations, and per-backend syscall /
   submission / completion counters.
 - SMT is enabled and `isolcpus` is not used, so a pinned thread still shares its core
-  with whatever else the host schedules there. This is the dominant caveat: the host
-  is a desktop session, not a dedicated test box (`results/env.txt` records the load
-  and the top CPU consumers at capture time).
-- The tail is attributed with in-process instrumentation rather than guesswork. Every
-  order is stamped twice inside the server: `enqueue_time` on the network thread after
-  parsing, and completion on the engine thread. The CSV therefore contains both the
-  arrival component (client send → parse) and the service component (parse → matched),
-  plus cumulative run-queue wait for both threads from
-  `/proc/thread-self/schedstat` (`engine_runq_ns`, `net_runq_ns`).
-- The network thread is left floating by default. Pinning it to one core made it
-  sensitive to unrelated host load and increased the tail (measurably: p99.9 158 µs
-  → 831 µs with 0.07 % of orders arriving >1 ms late).
+  with whatever else the host schedules there. Pinning the engine cut its run-queue
+  wait from 2.20 ms to 0.22 ms but improved p99.9 only from 127.7 to 86.8 µs, which
+  is not statistically significant at n = 10 (p = 0.14).
+- The network thread is left floating by default. The probe that pins it to one core
+  raised p99.9 from 51.5 to 127.5 µs; a confined thread cannot migrate away from
+  unrelated work.
 - All networking is loopback. The measurements quantify kernel/user-boundary and
   scheduling effects; they are not a NIC or cross-host benchmark.
 - `results/summary.md` separates *clean* runs from host-contended runs. A run is
   contended when at least one order was already >1 ms old at parse time; those runs
-  are listed individually rather than deleted. `results/host-isolation.txt` records a
-  one-off controlled check showing the same configuration move from 2.40 ms to
-  142 µs p99.9 when the host load was confined, which is what justifies treating the
+  are listed individually rather than deleted, and configurations are ranked on clean
+  runs only. `results/host-isolation.txt` records a controlled check — the same
+  configuration, same binary, moving from 2.40 ms to 142 µs p99.9 when an unrelated
+  desktop process was confined to the E-cores — which is what justifies treating the
   outliers as ingress delay rather than pipeline behaviour.
+
+## Documentation
+
+| Path | Contents |
+|---|---|
+| `docs/matching-engine-project-doc.md` | final report: design, methodology, results, conclusions |
+| `docs/contracts/phase-1-component-contract.md` | interface contract for the phase-1 components |
+| `docs/decisions/ring-buffer.md` | why the SPSC ring buffer is built the way it is |
+| `docs/iterations/0-iteration-plan.md` | the original iteration plan |
+| `docs/init/` | the submitted proposal and team plan (historical) |
+| `results/summary.md` | generated integrated tables (latency, throughput, saturation) |
+| `results/components-summary.md` | generated component benchmarks and their checks |
+| `results/env.txt` | host, power profile, per-CPU EPP/frequency, thermal snapshot, commit |
 
 ## Layout
 
@@ -156,8 +200,8 @@ include/      headers: engine, books, queues, wire format, recency, affinity
 src/          matching engine app, network backends, V1 book, mutex queue
 tools/        load_client
 tests/        unit, differential, parser and concurrency tests
-bench/        standalone book and pipeline microbenchmarks
+bench/        standalone book, pipeline, allocator and false-sharing microbenchmarks
 scripts/      environment capture, run harness, analysis, verification
-results/      env.txt, summary.csv/md, plots, raw per-run CSVs
-docs/         proposal, contracts, iteration plan, final report
+results/      env.txt, summary.csv/md, components, plots, raw per-run CSVs
+docs/         final report, contracts, decisions, iteration plan, original proposal
 ```
