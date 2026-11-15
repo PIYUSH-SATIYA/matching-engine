@@ -1,65 +1,65 @@
 # bench_allocator ops=2000000 live_set=8192 seed=42 reps=9 cpu=2
-# 2026-11-14T15:17:59+05:30
+# 2026-11-14T18:31:52+05:30
 --- rep 1 ---
 ops=2000000 live_set=8192 seed=42 cpu=2
 allocator                  alloc ns/op | alloc p50    p90    p99   p99.9 max  (ns) | free ns/op | free p50    p90    p99   p99.9 max  (ns) | alloc sd  free sd
-heap ::operator new/delete      20.43 |       20     21     26      50     5326 |    24.95 |      22     33     36     108    14921 |    21.21    31.38
-slab (SlabAllocator)            14.56 |       14     15     16      24     5161 |    16.36 |      16     18     20      29     3245 |    13.51     8.65
+heap ::operator new/delete      17.12 |       17     18     21      44     5756 |    21.60 |      19     28     30     136    25024 |    19.78    86.17
+slab (SlabAllocator)            12.58 |       13     13     14      23     3056 |    14.17 |      14     16     17      26     4120 |     7.94     9.50
 live_ok=YES ops_ok=YES
-slab_vs_heap_speedup alloc=1.40 x free=1.53 x  (heap_ns / slab_ns)
+slab_vs_heap_speedup alloc=1.36 x free=1.52 x  (heap_ns / slab_ns)
 --- rep 2 ---
 ops=2000000 live_set=8192 seed=42 cpu=2
 allocator                  alloc ns/op | alloc p50    p90    p99   p99.9 max  (ns) | free ns/op | free p50    p90    p99   p99.9 max  (ns) | alloc sd  free sd
-heap ::operator new/delete      19.76 |       19     20     26      49     6456 |    25.13 |      22     33     36     140     5935 |    20.73    16.69
-slab (SlabAllocator)            15.09 |       15     16     22      27    11132 |    17.00 |      16     19     26      32     8013 |    24.69    20.17
+heap ::operator new/delete      17.25 |       17     18     27      42    25167 |    21.97 |      19     28     31     139    24269 |    45.86    73.18
+slab (SlabAllocator)            12.59 |       13     13     15      16     3187 |    14.15 |      14     16     17      24     3608 |     6.66     8.47
 live_ok=YES ops_ok=YES
-slab_vs_heap_speedup alloc=1.31 x free=1.48 x  (heap_ns / slab_ns)
+slab_vs_heap_speedup alloc=1.37 x free=1.55 x  (heap_ns / slab_ns)
 --- rep 3 ---
 ops=2000000 live_set=8192 seed=42 cpu=2
 allocator                  alloc ns/op | alloc p50    p90    p99   p99.9 max  (ns) | free ns/op | free p50    p90    p99   p99.9 max  (ns) | alloc sd  free sd
-heap ::operator new/delete      19.77 |       19     20     29      48     4637 |    24.93 |      22     33     35     105     5525 |    20.27    15.78
-slab (SlabAllocator)            14.56 |       15     15     16      19     5498 |    16.41 |      16     18     20      30     4962 |    10.79    12.69
+heap ::operator new/delete      17.09 |       17     18     21      43     2638 |    21.76 |      19     28     31     135    24944 |    18.07    60.55
+slab (SlabAllocator)            12.64 |       13     13     14      16    21391 |    14.13 |      14     16     17      26     2346 |    29.81     6.70
 live_ok=YES ops_ok=YES
-slab_vs_heap_speedup alloc=1.36 x free=1.52 x  (heap_ns / slab_ns)
+slab_vs_heap_speedup alloc=1.35 x free=1.54 x  (heap_ns / slab_ns)
 --- rep 4 ---
 ops=2000000 live_set=8192 seed=42 cpu=2
 allocator                  alloc ns/op | alloc p50    p90    p99   p99.9 max  (ns) | free ns/op | free p50    p90    p99   p99.9 max  (ns) | alloc sd  free sd
-heap ::operator new/delete      19.91 |       19     20     26      52     5446 |    25.08 |      22     33     35     107     5297 |    22.92    16.17
-slab (SlabAllocator)            14.56 |       14     15     16      19     7389 |    16.45 |      16     18     20      30     4883 |    15.41    13.51
+heap ::operator new/delete      17.18 |       17     18     28      44    19939 |    22.49 |      19     28     32     142    26458 |    34.42   105.08
+slab (SlabAllocator)            12.60 |       13     13     14      16    15892 |    14.14 |      14     16     17      24     2256 |    21.91     7.46
 live_ok=YES ops_ok=YES
-slab_vs_heap_speedup alloc=1.37 x free=1.53 x  (heap_ns / slab_ns)
+slab_vs_heap_speedup alloc=1.36 x free=1.59 x  (heap_ns / slab_ns)
 --- rep 5 ---
 ops=2000000 live_set=8192 seed=42 cpu=2
 allocator                  alloc ns/op | alloc p50    p90    p99   p99.9 max  (ns) | free ns/op | free p50    p90    p99   p99.9 max  (ns) | alloc sd  free sd
-heap ::operator new/delete      19.74 |       19     20     25      55     5023 |    25.03 |      22     33     35     140     7056 |    20.21    17.90
-slab (SlabAllocator)            14.56 |       14     15     16      18     7825 |    16.41 |      16     18     20      29     8445 |    17.03    13.43
+heap ::operator new/delete      17.14 |       17     18     24      50    15324 |    22.76 |      19     28     31     142    25033 |    27.50   101.58
+slab (SlabAllocator)            12.61 |       13     13     14      17     2059 |    14.16 |      14     16     17      25     4307 |     4.19     9.92
 live_ok=YES ops_ok=YES
-slab_vs_heap_speedup alloc=1.36 x free=1.53 x  (heap_ns / slab_ns)
+slab_vs_heap_speedup alloc=1.36 x free=1.61 x  (heap_ns / slab_ns)
 --- rep 6 ---
 ops=2000000 live_set=8192 seed=42 cpu=2
 allocator                  alloc ns/op | alloc p50    p90    p99   p99.9 max  (ns) | free ns/op | free p50    p90    p99   p99.9 max  (ns) | alloc sd  free sd
-heap ::operator new/delete      19.88 |       19     20     29      49     6096 |    24.91 |      22     33     35     105    14675 |    21.59    27.74
-slab (SlabAllocator)            14.55 |       14     15     16      17     5481 |    16.39 |      16     18     19      27     8538 |    14.74    16.67
+heap ::operator new/delete      17.06 |       17     18     24      50    25988 |    22.21 |      19     28     31     133    22931 |    37.54    81.31
+slab (SlabAllocator)            12.57 |       13     13     14      16     1992 |    14.12 |      14     16     17      24     2770 |     6.93     6.42
 live_ok=YES ops_ok=YES
-slab_vs_heap_speedup alloc=1.37 x free=1.52 x  (heap_ns / slab_ns)
+slab_vs_heap_speedup alloc=1.36 x free=1.57 x  (heap_ns / slab_ns)
 --- rep 7 ---
 ops=2000000 live_set=8192 seed=42 cpu=2
 allocator                  alloc ns/op | alloc p50    p90    p99   p99.9 max  (ns) | free ns/op | free p50    p90    p99   p99.9 max  (ns) | alloc sd  free sd
-heap ::operator new/delete      19.83 |       19     20     25      49     7354 |    25.08 |      22     33     35     115     9263 |    25.94    19.71
-slab (SlabAllocator)            14.56 |       15     15     16      26     5882 |    16.45 |      16     18     20      28     5466 |    10.04    13.81
+heap ::operator new/delete      17.69 |       17     19     24      44     6054 |    22.46 |      19     28     31     140    26449 |    20.31   104.95
+slab (SlabAllocator)            12.76 |       13     14     14      16     1874 |    14.11 |      14     16     17      25     6417 |     6.50    12.42
 live_ok=YES ops_ok=YES
-slab_vs_heap_speedup alloc=1.36 x free=1.52 x  (heap_ns / slab_ns)
+slab_vs_heap_speedup alloc=1.39 x free=1.59 x  (heap_ns / slab_ns)
 --- rep 8 ---
 ops=2000000 live_set=8192 seed=42 cpu=2
 allocator                  alloc ns/op | alloc p50    p90    p99   p99.9 max  (ns) | free ns/op | free p50    p90    p99   p99.9 max  (ns) | alloc sd  free sd
-heap ::operator new/delete      19.66 |       19     20     24      46     6256 |    24.95 |      22     33     35     110    11052 |    21.52    20.15
-slab (SlabAllocator)            14.58 |       15     15     16      19     8311 |    16.44 |      16     18     20      28     8683 |    16.65    19.94
+heap ::operator new/delete      16.96 |       17     18     22      46     3427 |    22.04 |      19     28     31     134   150431 |    17.74   203.25
+slab (SlabAllocator)            12.57 |       13     13     14      23     5198 |    14.05 |      14     16     17      23     1981 |     9.86     6.00
 live_ok=YES ops_ok=YES
-slab_vs_heap_speedup alloc=1.35 x free=1.52 x  (heap_ns / slab_ns)
+slab_vs_heap_speedup alloc=1.35 x free=1.57 x  (heap_ns / slab_ns)
 --- rep 9 ---
 ops=2000000 live_set=8192 seed=42 cpu=2
 allocator                  alloc ns/op | alloc p50    p90    p99   p99.9 max  (ns) | free ns/op | free p50    p90    p99   p99.9 max  (ns) | alloc sd  free sd
-heap ::operator new/delete      19.67 |       19     20     27      49     6883 |    25.09 |      22     33     35     111     5998 |    26.29    19.71
-slab (SlabAllocator)            14.53 |       14     15     16      18     6466 |    16.37 |      16     18     20      29     6115 |    12.59    11.78
+heap ::operator new/delete      17.15 |       17     18     21      42    61107 |    22.19 |      19     28     31     123    25110 |    87.52    86.10
+slab (SlabAllocator)            12.54 |       13     13     14      15     2341 |    14.13 |      14     16     17      23     3880 |     6.70     8.98
 live_ok=YES ops_ok=YES
-slab_vs_heap_speedup alloc=1.35 x free=1.53 x  (heap_ns / slab_ns)
+slab_vs_heap_speedup alloc=1.37 x free=1.57 x  (heap_ns / slab_ns)

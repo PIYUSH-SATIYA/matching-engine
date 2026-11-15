@@ -1,15 +1,15 @@
 # bench_pipeline orders=1010000 rate=200000 seed=42 reps=9
 # producer cpu=6 engine cpu=2
-# 2026-11-14T15:14:44+05:30
+# 2026-11-14T18:28:38+05:30
 --- rep 1 ---
 orders=1010000  paced rate=200000/s  cpus: producer=6 engine=2  (hw threads: 12)
 
 queue  book | throughput |   p50 ns   p99 ns p99.9 ns    max ns   achvd k/s
 -----------+------------+--------------------------------------------------
-mutex  V1   |     2.74 M/s |     1830   374607  7711452  12566469         200
-mutex  V3   |     2.84 M/s |     1820   385689  2422011   2815938         200
-spsc   V1   |     5.08 M/s |      355      962  8828298  13524486         200
-spsc   V3   |     6.12 M/s |      338      561     1075     20923         200
+mutex  V1   |     3.23 M/s |     1585     3246  5237729  10084124         200
+mutex  V3   |     3.44 M/s |     1552     3895    14025    175170         200
+spsc   V1   |     6.18 M/s |      240      888  7133700  11970299         200
+spsc   V3   |     7.21 M/s |      295      672    11978    159378         200
 
 result check: trades=789497 traded_qty=20135763  all 4 configs identical: YES
 --- rep 2 ---
@@ -17,10 +17,10 @@ orders=1010000  paced rate=200000/s  cpus: producer=6 engine=2  (hw threads: 12)
 
 queue  book | throughput |   p50 ns   p99 ns p99.9 ns    max ns   achvd k/s
 -----------+------------+--------------------------------------------------
-mutex  V1   |     2.73 M/s |     1808     2628  7407470  12235998         200
-mutex  V3   |     3.00 M/s |     1820     2277    35662   1097063         200
-spsc   V1   |     4.89 M/s |      357      990  8543692  13286999         200
-spsc   V3   |     6.23 M/s |      344      572     1076     36858         200
+mutex  V1   |     3.27 M/s |     1603     4011  6118380  10980831         200
+mutex  V3   |     3.44 M/s |     1562     3489    13768     42365         200
+spsc   V1   |     5.77 M/s |      249      833  5384827  10228266         200
+spsc   V3   |     7.39 M/s |      300     1647    12878    150554         200
 
 result check: trades=789497 traded_qty=20135763  all 4 configs identical: YES
 --- rep 3 ---
@@ -28,10 +28,10 @@ orders=1010000  paced rate=200000/s  cpus: producer=6 engine=2  (hw threads: 12)
 
 queue  book | throughput |   p50 ns   p99 ns p99.9 ns    max ns   achvd k/s
 -----------+------------+--------------------------------------------------
-mutex  V1   |     2.72 M/s |     1838     2922  8079999  12937638         200
-mutex  V3   |     2.81 M/s |     1826     3784  1978429   2815434         200
-spsc   V1   |     4.83 M/s |      362      940  8834725  13576600         200
-spsc   V3   |     5.91 M/s |      324      547     2350     20720         200
+mutex  V1   |     3.29 M/s |     1595     3829  6293804  10972118         200
+mutex  V3   |     3.54 M/s |     1559     4484    14557    404287         200
+spsc   V1   |     6.15 M/s |      246      836  5045939   9885511         200
+spsc   V3   |     7.31 M/s |      300     2254    13150    589344         200
 
 result check: trades=789497 traded_qty=20135763  all 4 configs identical: YES
 --- rep 4 ---
@@ -39,10 +39,10 @@ orders=1010000  paced rate=200000/s  cpus: producer=6 engine=2  (hw threads: 12)
 
 queue  book | throughput |   p50 ns   p99 ns p99.9 ns    max ns   achvd k/s
 -----------+------------+--------------------------------------------------
-mutex  V1   |     2.74 M/s |     1826     3311  7605892  12412599         200
-mutex  V3   |     2.97 M/s |     1816     2259    15692   1578185         200
-spsc   V1   |     4.74 M/s |      347      952  8278290  13027432         200
-spsc   V3   |     5.90 M/s |      328      546     1091     40566         200
+mutex  V1   |     3.30 M/s |     1599     3591  6486068  11342031         200
+mutex  V3   |     3.49 M/s |     1565     3790    14617    343777         200
+spsc   V1   |     5.44 M/s |      246      792  5408593  10251379         200
+spsc   V3   |     7.35 M/s |      299      948    13542    162096         200
 
 result check: trades=789497 traded_qty=20135763  all 4 configs identical: YES
 --- rep 5 ---
@@ -50,10 +50,10 @@ orders=1010000  paced rate=200000/s  cpus: producer=6 engine=2  (hw threads: 12)
 
 queue  book | throughput |   p50 ns   p99 ns p99.9 ns    max ns   achvd k/s
 -----------+------------+--------------------------------------------------
-mutex  V1   |     2.76 M/s |     1834  1705972  8167185  13019367         200
-mutex  V3   |     2.82 M/s |     1815  1810481  2696012   2820060         200
-spsc   V1   |     4.58 M/s |      353      993  7386711  12139882         200
-spsc   V3   |     5.95 M/s |      335      555     1079     21472         200
+mutex  V1   |     2.97 M/s |     1606     3901  6709156  11558066         200
+mutex  V3   |     3.47 M/s |     1554     3455    14239    835949         200
+spsc   V1   |     5.71 M/s |      242     1072  5466762  10316047         200
+spsc   V3   |     7.35 M/s |      295     2353    13576    162357         200
 
 result check: trades=789497 traded_qty=20135763  all 4 configs identical: YES
 --- rep 6 ---
@@ -61,10 +61,10 @@ orders=1010000  paced rate=200000/s  cpus: producer=6 engine=2  (hw threads: 12)
 
 queue  book | throughput |   p50 ns   p99 ns p99.9 ns    max ns   achvd k/s
 -----------+------------+--------------------------------------------------
-mutex  V1   |     2.58 M/s |     1839  2172812  7315122  12150163         200
-mutex  V3   |     2.94 M/s |     1822   533771  2495159   2823847         200
-spsc   V1   |     4.60 M/s |      349      952  7698442  12459050         200
-spsc   V3   |     6.14 M/s |      331      556     1058     44334         200
+mutex  V1   |     3.27 M/s |     1600     3631  6165567  11020106         200
+mutex  V3   |     3.54 M/s |     1564     4140    14103    413813         200
+spsc   V1   |     5.80 M/s |      250      799  5530115  10322448         200
+spsc   V3   |     7.46 M/s |      302      746    13304    161550         200
 
 result check: trades=789497 traded_qty=20135763  all 4 configs identical: YES
 --- rep 7 ---
@@ -72,10 +72,10 @@ orders=1010000  paced rate=200000/s  cpus: producer=6 engine=2  (hw threads: 12)
 
 queue  book | throughput |   p50 ns   p99 ns p99.9 ns    max ns   achvd k/s
 -----------+------------+--------------------------------------------------
-mutex  V1   |     2.80 M/s |     1883   742885  8401917  13160969         200
-mutex  V3   |     2.99 M/s |     1811     7861  2208539   2817686         200
-spsc   V1   |     4.63 M/s |      360     1912 10367215  15099725         200
-spsc   V3   |     5.23 M/s |      343      563     1154     28888         200
+mutex  V1   |     2.97 M/s |     1599     3565  6261053  11130302         200
+mutex  V3   |     3.34 M/s |     1568     4577    14871    440332         200
+spsc   V1   |     6.32 M/s |      249      851  5323745  10160723         200
+spsc   V3   |     7.46 M/s |      302     2236    12912    156989         200
 
 result check: trades=789497 traded_qty=20135763  all 4 configs identical: YES
 --- rep 8 ---
@@ -83,10 +83,10 @@ orders=1010000  paced rate=200000/s  cpus: producer=6 engine=2  (hw threads: 12)
 
 queue  book | throughput |   p50 ns   p99 ns p99.9 ns    max ns   achvd k/s
 -----------+------------+--------------------------------------------------
-mutex  V1   |     2.73 M/s |     1894   456283  8846411  13639764         200
-mutex  V3   |     2.92 M/s |     1832     5086  1768421   2818428         200
-spsc   V1   |     4.81 M/s |      354      965  8122114  12871202         200
-spsc   V3   |     6.06 M/s |      343      569     1217     29356         200
+mutex  V1   |     3.21 M/s |     1600     3319  6499088  11368511         200
+mutex  V3   |     3.55 M/s |     1591     4328    14689    507704         200
+spsc   V1   |     5.77 M/s |      247      821  5396296  10242494         200
+spsc   V3   |     7.25 M/s |      299     1869    13230    160190         200
 
 result check: trades=789497 traded_qty=20135763  all 4 configs identical: YES
 --- rep 9 ---
@@ -94,9 +94,9 @@ orders=1010000  paced rate=200000/s  cpus: producer=6 engine=2  (hw threads: 12)
 
 queue  book | throughput |   p50 ns   p99 ns p99.9 ns    max ns   achvd k/s
 -----------+------------+--------------------------------------------------
-mutex  V1   |     2.75 M/s |     1827   240728  8018380  12842424         200
-mutex  V3   |     2.98 M/s |     1820     5634  1813992   2816177         200
-spsc   V1   |     4.86 M/s |      352      973  7661477  12419353         200
-spsc   V3   |     6.07 M/s |      335      564     1609     35291         200
+mutex  V1   |     3.27 M/s |     1595     3356  6030892  10863870         200
+mutex  V3   |     3.52 M/s |     1556     3705    14710    164840         200
+spsc   V1   |     5.77 M/s |      247      888  5274538  10099392         200
+spsc   V3   |     7.43 M/s |      295      919    13310    158094         200
 
 result check: trades=789497 traded_qty=20135763  all 4 configs identical: YES
