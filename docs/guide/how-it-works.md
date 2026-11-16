@@ -8,6 +8,11 @@ states results compactly; this one walks the same system from the beginning, at 
 slower pace, for a reader who knows what a program and a benchmark are but has not
 built a lock-free concurrent service in C++ before.
 
+If you want the journey of **one individual order** rather than the design
+decisions, read [One Order's Complete Journey](order-lifecycle.md). It follows
+the actual 40-byte message from the client through parsing, both queue choices,
+the matching branches, book mutation, terminal outcomes, and shutdown.
+
 It is organised the way the work actually depends on itself:
 
 1. the system shape and why it is that shape,
