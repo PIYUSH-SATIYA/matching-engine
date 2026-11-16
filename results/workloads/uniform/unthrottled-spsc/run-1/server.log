@@ -1,0 +1,10 @@
+
+=== workload-uniform-spsc run=1 ===
+orders=2000000 warmup=10000 measured=1990000 accepted=2000000 trades=875043 rejected=64540 invalid=0
+throughput=5043781/s duration=0.394545s
+p50=1880881 p90=30998241 p95=32601437 p99=34856678 p99.9=35385664 max=35484575 ns
+minflt=627 majflt=0 nvcsw=0 nivcsw=9 user=0.392s sys=0.002s migrations=0 kernel_ops=22686 runq=0.129ms
+net: nvcsw=1041 nivcsw=56 user=0.216s sys=0.012s runq=20.851ms
+queue: full_waits=787173 empty_waits=63 offered_rate=0/s
+split: arrival p50=187868 p99=30797822 p99.9=31883616 | service p50=1658990 p99=4047696 p99.9=4403242 ns
+ingest: orders_older_than_1ms=873968 max=31999471 ns

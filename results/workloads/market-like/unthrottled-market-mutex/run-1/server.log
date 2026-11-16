@@ -1,0 +1,10 @@
+
+=== workload-market-like-mutex run=1 ===
+orders=2000000 warmup=10000 measured=1990000 accepted=2000000 trades=1394228 rejected=0 invalid=0
+throughput=2157903/s duration=0.922191s
+p50=33127212 p90=38348302 p95=39603014 p99=41842333 p99.9=43203535 max=44059596 ns
+minflt=880 majflt=0 nvcsw=142 nivcsw=13 user=0.682s sys=0.240s migrations=0 kernel_ops=19742 runq=0.184ms
+net: nvcsw=173781 nivcsw=59 user=0.304s sys=0.304s runq=36.375ms
+queue: full_waits=214601 empty_waits=2 offered_rate=0/s
+split: arrival p50=25427307 p99=34079073 p99.9=35050074 | service p50=7445892 p99=9627138 p99.9=10001484 ns
+ingest: orders_older_than_1ms=1956004 max=35422545 ns

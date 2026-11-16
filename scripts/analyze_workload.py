@@ -71,33 +71,46 @@ def svg_bar(path: Path, title: str, rows: list[dict], key: str, color: str) -> N
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True, type=Path)
+    parser.add_argument("--output", type=Path,
+                        help="report directory; defaults to --input")
     parser.add_argument("--recursive", action="store_true",
                         help="compare profile/timestamp directories below --input")
+    parser.add_argument("--offered-rate", type=float,
+                        help="keep only server rows with this offered rate")
     args = parser.parse_args()
     root = args.input
     rows = load(root, args.recursive)
+    if args.offered_rate is not None:
+        rows = [r for r in rows if r["offered_rate"] == args.offered_rate]
     if not rows:
         raise SystemExit(f"no run CSVs under {root}")
+    output = args.output or root
+    output.mkdir(parents=True, exist_ok=True)
     summary = []
-    for profile in sorted({r["profile"] for r in rows}):
-        group = [r for r in rows if r["profile"] == profile]
-        summary.append({"profile": profile, "runs": len(group),
+    groups = sorted({(r["profile"], r.get("config", "")) for r in rows})
+    for profile, config in groups:
+        group = [r for r in rows if r["profile"] == profile and r.get("config", "") == config]
+        label = profile
+        if len({r.get("config", "") for r in rows if r["profile"] == profile}) > 1:
+            suffix = config.rsplit("-", 1)[-1] if config else "unknown"
+            label = f"{profile} / {suffix}"
+        summary.append({"profile": label, "runs": len(group),
                         **{key: med(group, key) for key in
                            ("p50", "p95", "p99", "p999", "throughput", "accepted",
                             "rejected", "invalid", "trades", "queue_full_waits",
                             "queue_empty_waits", "invalid_generated", "duplicate_generated",
                             "valid_generated")}})
-    plots = root / "plots"
+    plots = output / "plots"
     plots.mkdir(exist_ok=True)
     svg_bar(plots / "latency-p50.svg", "Median latency by workload (us)", summary, "p50", "#1f4e79")
     svg_bar(plots / "latency-p999.svg", "p99.9 latency by workload (us)", summary, "p999", "#a2261e")
     svg_bar(plots / "throughput.svg", "Achieved throughput by workload (orders/s)", summary, "throughput", "#0f6e6e")
-    with (root / "summary.csv").open("w", newline="") as fh:
+    with (output / "summary.csv").open("w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=summary[0].keys())
         writer.writeheader(); writer.writerows(summary)
-    (root / "analysis.json").write_text(json.dumps({"runs": rows, "summary": summary}, indent=2))
-    with (root / "summary.md").open("w") as fh:
-        fh.write(f"# Workload results: {root.name}\n\n")
+    (output / "analysis.json").write_text(json.dumps({"runs": rows, "summary": summary}, indent=2))
+    with (output / "summary.md").open("w") as fh:
+        fh.write(f"# Workload results: {output.name}\n\n")
         fh.write(f"Runs: {len(rows)}. Baseline `results/raw/` was not read or modified.\n\n")
         fh.write("| profile | runs | p50 (us) | p95 (us) | p99 (us) | p99.9 (us) | throughput | accepted | rejected | parser invalid | generated invalid | duplicates | trades |\n")
         fh.write("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n")
@@ -106,7 +119,7 @@ def main() -> None:
         fh.write("\n## Charts\n\n![Median latency](plots/latency-p50.svg)\n\n![Tail latency](plots/latency-p999.svg)\n\n![Throughput](plots/throughput.svg)\n\n")
         fh.write("`invalid` is the server parser count. `generated invalid` and `duplicates` "
                  "come from the workload manifest; invalid wire records do not enter the book.\n")
-    print(root / "summary.md")
+    print(output / "summary.md")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,2 @@
+profile,runs,p50,p95,p99,p999,throughput,accepted,rejected,invalid,trades,queue_full_waits,queue_empty_waits,invalid_generated,duplicate_generated,valid_generated
+clustered-book,1,738075.0,1797005.0,2426071.0,2594379.0,5625713.0,2000000.0,197203.0,0.0,744455.0,0.0,392.0,0.0,0.0,2000000.0

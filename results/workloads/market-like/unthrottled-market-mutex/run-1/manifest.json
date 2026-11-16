@@ -1,0 +1,22 @@
+{
+  "profile": "market-like",
+  "seed": 42,
+  "orders": 2000000,
+  "rate": 0,
+  "batch": 0,
+  "invalid_rate": 0,
+  "duplicate_rate": 0,
+  "generated": 2000000,
+  "valid_generated": 2000000,
+  "invalid_id": 0,
+  "invalid_side": 0,
+  "invalid_quantity": 0,
+  "duplicate_generated": 0,
+  "buys": 999595,
+  "sells": 1000405,
+  "price_min": 32119,
+  "price_max": 33434,
+  "price_mean": 32768.1,
+  "quantity_mean": 50.4032,
+  "elapsed_s": 0.897376
+}

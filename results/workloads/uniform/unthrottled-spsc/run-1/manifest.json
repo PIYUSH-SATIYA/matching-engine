@@ -1,0 +1,22 @@
+{
+  "profile": "uniform",
+  "seed": 42,
+  "orders": 2000000,
+  "rate": 0,
+  "batch": 0,
+  "invalid_rate": 0,
+  "duplicate_rate": 0,
+  "generated": 2000000,
+  "valid_generated": 2000000,
+  "invalid_id": 0,
+  "invalid_side": 0,
+  "invalid_quantity": 0,
+  "duplicate_generated": 0,
+  "buys": 999598,
+  "sells": 1000402,
+  "price_min": 32660,
+  "price_max": 32874,
+  "price_mean": 32768,
+  "quantity_mean": 39.2422,
+  "elapsed_s": 0.364876
+}

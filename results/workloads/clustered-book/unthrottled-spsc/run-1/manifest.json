@@ -1,0 +1,22 @@
+{
+  "profile": "clustered-book",
+  "seed": 42,
+  "orders": 2000000,
+  "rate": 0,
+  "batch": 0,
+  "invalid_rate": 0,
+  "duplicate_rate": 0,
+  "generated": 2000000,
+  "valid_generated": 2000000,
+  "invalid_id": 0,
+  "invalid_side": 0,
+  "invalid_quantity": 0,
+  "duplicate_generated": 0,
+  "buys": 999416,
+  "sells": 1000584,
+  "price_min": 32391,
+  "price_max": 33158,
+  "price_mean": 32768,
+  "quantity_mean": 39.2633,
+  "elapsed_s": 0.353459
+}
