@@ -184,14 +184,14 @@ Limitations that matter when reading the numbers:
 
 | Path | Contents |
 |---|---|
-| `docs/matching-engine-project-doc.md` | final report: design, methodology, results, conclusions |
-| `docs/contracts/phase-1-component-contract.md` | interface contract for the phase-1 components |
-| `docs/decisions/ring-buffer.md` | why the SPSC ring buffer is built the way it is |
-| `docs/iterations/0-iteration-plan.md` | the original iteration plan |
-| `docs/init/` | the submitted proposal and team plan (historical) |
-| `results/summary.md` | generated integrated tables (latency, throughput, saturation) |
-| `results/components-summary.md` | generated component benchmarks and their checks |
-| `results/env.txt` | host, power profile, per-CPU EPP/frequency, thermal snapshot, commit |
+| [`docs/matching-engine-project-doc.md`](docs/matching-engine-project-doc.md) | final report: design, methodology, results, conclusions |
+| [`docs/design/component-contract.md`](docs/design/component-contract.md) | interface contract the components were implemented against |
+| [`docs/design/ring-buffer-decision.md`](docs/design/ring-buffer-decision.md) | why the first queue is the blocking one |
+| [`docs/plan/iteration-plan.md`](docs/plan/iteration-plan.md) | the iteration plan used during the build |
+| [`docs/archive/`](docs/archive/) | the submitted proposal and team plan, kept for provenance |
+| [`results/summary.md`](results/summary.md) | generated integrated tables (latency, throughput, saturation) |
+| [`results/components-summary.md`](results/components-summary.md) | generated component benchmarks and their checks |
+| [`results/env.txt`](results/env.txt) | host, power profile, per-CPU EPP/frequency, thermal snapshot, commit |
 
 ## Layout
 
@@ -203,5 +203,5 @@ tests/        unit, differential, parser and concurrency tests
 bench/        standalone book, pipeline, allocator and false-sharing microbenchmarks
 scripts/      environment capture, run harness, analysis, verification
 results/      env.txt, summary.csv/md, components, plots, raw per-run CSVs
-docs/         final report, contracts, decisions, iteration plan, original proposal
+docs/         final report, design notes, iteration plan, archive
 ```
