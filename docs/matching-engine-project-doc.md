@@ -17,7 +17,7 @@
 | Member | Name | Roll No. |
 |---|---|---|
 | A | Piyush Satiya | 202451130 |
-| B | Prayag Kirar | 202451130 |
+| B | Prayag Kirar | 202451134 |
 | C | Sanskar Sharma | 202451148 |
 | D | Sorabh Baldeva | 202451156 |
 | E | Ved Gupta | 202451166 |
