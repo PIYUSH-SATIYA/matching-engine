@@ -184,6 +184,7 @@ Limitations that matter when reading the numbers:
 
 | Path | Contents |
 |---|---|
+| [`docs/guide/how-it-works.md`](docs/guide/how-it-works.md) | start here: the whole design, component by component, then how the benchmarks work and how to read them |
 | [`docs/matching-engine-project-doc.md`](docs/matching-engine-project-doc.md) | final report: design, methodology, results, conclusions |
 | [`docs/matching-engine-report.tex`](docs/matching-engine-report.tex) | the same report as an IEEE-format paper (compile on Overleaf) |
 | [`docs/design/component-contract.md`](docs/design/component-contract.md) | interface contract the components were implemented against |
@@ -197,12 +198,13 @@ Limitations that matter when reading the numbers:
 ## Layout
 
 ```
-include/      headers: engine, books, queues, wire format, recency, affinity
+include/      headers: engine, books, queues, wire format, slab allocator, sinks,
+              benchmark recorder, affinity
 src/          matching engine app, network backends, V1 book, mutex queue
 tools/        load_client
 tests/        unit, differential, parser and concurrency tests
 bench/        standalone book, pipeline, allocator and false-sharing microbenchmarks
 scripts/      environment capture, run harness, analysis, verification
 results/      env.txt, summary.csv/md, components, plots, raw per-run CSVs
-docs/         final report, design notes, iteration plan, archive
+docs/         guide, final report, design notes, iteration plan, archive
 ```
