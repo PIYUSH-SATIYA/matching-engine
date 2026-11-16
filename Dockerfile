@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
     git \
     liburing-dev \
     linux-tools-generic \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
