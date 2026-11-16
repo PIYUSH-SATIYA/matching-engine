@@ -1,0 +1,15 @@
+services:
+  dev:
+    build: .
+    container_name: matching-engine-dev
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    cap_add:
+      - SYS_NICE
+      - SYS_ADMIN
+      - IPC_LOCK
+    security_opt:
+      - seccomp:unconfined
+    stdin_open: true
+    tty: true

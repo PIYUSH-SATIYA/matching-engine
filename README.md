@@ -43,6 +43,10 @@ must run on the same host.
 
 ## Build and test
 
+The commands below assume the toolchain on the host. The project is also set up to
+run entirely inside a container, so the host needs only Docker — see
+[Container workflow](#container-workflow-optional-isolation) below.
+
 ```bash
 cmake -S . -B build-rel -DCMAKE_BUILD_TYPE=Release
 cmake --build build-rel -j"$(nproc)"
@@ -61,6 +65,40 @@ ctest --test-dir build-tsan -R 'ring_buffer|spsc' --output-on-failure
 
 `scripts/verify.sh` automates all of the above plus an end-to-end epoll/io_uring
 checksum comparison.
+
+### Container workflow (optional isolation)
+
+The project also builds and runs inside a container, so the host machine only needs
+Docker and none of the C++ toolchain:
+
+| file | role |
+|---|---|
+| `Dockerfile` | image with gcc/g++, CMake, Ninja, gdb, git and `liburing-dev` |
+| `docker-compose.yml` | bind-mounts the repository at `/workspace`, adds `SYS_NICE`/`SYS_ADMIN`/`IPC_LOCK` |
+| `dev.sh` | `docker compose run --rm dev "$@"` — one throwaway container per command |
+
+```bash
+./dev.sh bash                                                # shell inside the image
+./dev.sh cmake -S . -B build-rel -DCMAKE_BUILD_TYPE=Release
+./dev.sh cmake --build build-rel -j"$(nproc)"
+./dev.sh ctest --test-dir build-rel --output-on-failure
+./dev.sh scripts/verify.sh                                   # full Release+ASan+TSan check
+```
+
+The first invocation builds the image; later ones reuse it.
+
+What this does and does not isolate:
+
+- The repository is bind-mounted, not copied. Source edits from a native editor and
+  everything written to `results/` stay on the host and are visible to it; only the
+  compiler, libraries and tools live in the image.
+- Each `./dev.sh` invocation is `--rm`, so no container state accumulates. Deleting
+  the image (`docker image rm` / `docker compose down --rmi all`) removes every
+  project dependency; the code and results are untouched.
+- The container runs as root, so build directories it creates are root-owned on the
+  host. They are gitignored; `sudo rm -rf build build-asan build-tsan` reclaims them.
+- The image installs the C++ toolchain, not Python. The analysis scripts
+  (`scripts/analyze*.py`) use only the standard library, so they run on either side.
 
 ## Run one measurement
 
@@ -198,6 +236,7 @@ Limitations that matter when reading the numbers:
 ## Layout
 
 ```
+root files    CMakeLists.txt, compile_flags.txt, Dockerfile, docker-compose.yml, dev.sh
 include/      headers: engine, books, queues, wire format, slab allocator, sinks,
               benchmark recorder, affinity
 src/          matching engine app, network backends, V1 book, mutex queue
