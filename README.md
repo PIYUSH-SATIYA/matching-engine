@@ -258,6 +258,7 @@ Limitations that matter when reading the numbers:
 |---|---|
 | [`docs/guide/components/`](docs/guide/components/) | component-by-component implementation tutorial with source citations, V1/V3 explanation, and experiment wiring |
 | [`docs/guide/order-lifecycle.md`](docs/guide/order-lifecycle.md) | complete single-order lifecycle, branch-by-branch outcomes, component variants, and source-code reading guide |
+| [`docs/project-operations-guide.md`](docs/project-operations-guide.md) | setup, native/container builds, incremental C++ workflow, benchmark commands, workload profiles, results, and UI/UX direction |
 | [`docs/guide/how-it-works.md`](docs/guide/how-it-works.md) | start here: the whole design, component by component, then how the benchmarks work and how to read them |
 | [`docs/matching-engine-project-doc.md`](docs/matching-engine-project-doc.md) | final report: design, methodology, results, conclusions |
 | [`docs/matching-engine-report.tex`](docs/matching-engine-report.tex) | the same report as an IEEE-format paper (compile on Overleaf) |
