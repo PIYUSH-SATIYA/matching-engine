@@ -287,7 +287,7 @@ simple, and the baseline that makes the optimized version's gains attributable.
 \textbf{V3 (optimized).} Prices index a flat array
 (\texttt{levels\_[price-min\_price]}), so locating a level is an addition rather
 than a tree walk. Each level is an intrusive doubly linked list of nodes that are
-\texttt{alignas(64)}, and a 40-byte order plus two pointers is exactly one
+\texttt{alignas(64)}, and a 48-byte order plus two pointers is exactly one
 64-byte cache line (\texttt{static\_assert(sizeof(Node)==64)}). Best price is
 found with a two-level bitmap and \texttt{ctz}/\texttt{clz}; empty-level
 transitions update the bitmap incrementally. An open-addressing table, sized at

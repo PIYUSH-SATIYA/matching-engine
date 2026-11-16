@@ -183,7 +183,7 @@ class OrderBookFast {
  private:
   static constexpr std::size_t kNone = static_cast<std::size_t>(-1);
 
-  // One cache line per order: 40 B Order + 2 pointers = 56 B, padded to 64.
+  // One cache line per order: 48 B Order + 2 pointers = 64 B exactly.
   struct alignas(64) Node {
     Order order;
     Node* prev;

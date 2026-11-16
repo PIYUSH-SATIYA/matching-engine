@@ -159,8 +159,8 @@ baseline that makes the optimized version's gains attributable.
 - Prices index a flat array `levels_[price - min_price]`, so finding a level is
   an add, not a tree walk.
 - Each level is an intrusive doubly-linked list of `Node`s; `alignas(64)` with a
-  40-byte `Order` plus two pointers gives exactly one cache line per resting
-  order (`static_assert(sizeof(Node) == 64)`).
+  48-byte `Order` plus two pointers gives exactly one 64-byte cache line per
+  resting order (`static_assert(sizeof(Node) == 64)`).
 - The best price is found with a two-level bitmap and `ctz`/`clz` instead of
   `map.begin()`; empty-level transitions update the bitmap incrementally.
 - An open-addressing hash table, pre-sized to never rehash, maps id → node.
@@ -233,7 +233,7 @@ that a message is fully buffered before it is consumed.
 
 ### 4.7 Measurement instrumentation
 
-Every run produces one CSV row (42 columns) covering the latency distribution
+Every run produces one CSV row (46 columns) covering the latency distribution
 (p50/p90/p95/p99/p99.9/max), the arrival/service split, per-thread CPU time,
 context switches, minor/major faults, network syscall counts, SPSC yields, ingest
 lateness, and run-queue wait. Run 1 of each configuration also writes the raw
