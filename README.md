@@ -222,6 +222,7 @@ Limitations that matter when reading the numbers:
 
 | Path | Contents |
 |---|---|
+| [`docs/guide/components/`](docs/guide/components/) | component-by-component implementation tutorial with source citations, V1/V3 explanation, and experiment wiring |
 | [`docs/guide/order-lifecycle.md`](docs/guide/order-lifecycle.md) | complete single-order lifecycle, branch-by-branch outcomes, component variants, and source-code reading guide |
 | [`docs/guide/how-it-works.md`](docs/guide/how-it-works.md) | start here: the whole design, component by component, then how the benchmarks work and how to read them |
 | [`docs/matching-engine-project-doc.md`](docs/matching-engine-project-doc.md) | final report: design, methodology, results, conclusions |
