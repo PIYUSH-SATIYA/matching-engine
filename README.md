@@ -185,6 +185,7 @@ Limitations that matter when reading the numbers:
 | Path | Contents |
 |---|---|
 | [`docs/matching-engine-project-doc.md`](docs/matching-engine-project-doc.md) | final report: design, methodology, results, conclusions |
+| [`docs/matching-engine-report.tex`](docs/matching-engine-report.tex) | the same report as an IEEE-format paper (compile on Overleaf) |
 | [`docs/design/component-contract.md`](docs/design/component-contract.md) | interface contract the components were implemented against |
 | [`docs/design/ring-buffer-decision.md`](docs/design/ring-buffer-decision.md) | why the first queue is the blocking one |
 | [`docs/plan/iteration-plan.md`](docs/plan/iteration-plan.md) | the iteration plan used during the build |

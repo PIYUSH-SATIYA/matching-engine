@@ -47,9 +47,9 @@ Four results carry the report:
 
 2. **The queue choice is invisible at p50 and dominant in the tail and in
    throughput.** SPSC vs mutex, everything else fixed: p50 26.8 µs vs 24.3 µs
-   (indistinguishable, permutation p = 0.14); p99 **38.9 µs vs 71.7 µs**
-   (p = 0.0009); *service* p99.9 across the four configurations **20.7 µs vs
-   68.6 µs** (p = 0.0007 for the pinned pair); throughput **5.86 M/s vs
+   (indistinguishable, exact permutation p = 0.145); p99 **38.9 µs vs 71.7 µs**
+   (p = 0.0008); *service* p99.9 across the four configurations **20.7 µs vs
+   68.6 µs** (p = 0.0008 for the pinned pair); throughput **5.86 M/s vs
    3.34 M/s**; engine CPU **0.17–0.19 µs vs 0.30–0.32 µs** per order; voluntary
    context switches in the network thread **12–15 vs 157 000–199 000**. A
    condvar queue must be woken and scheduled for every batch; an SPSC consumer
@@ -60,7 +60,7 @@ Four results carry the report:
    **10.97 ms** worst case into **26.7 µs**; in the integrated pipeline the V1
    book alone produces **6.52 ms p99.9**, 99.7 % of it inside the engine. The
    slab allocator, by contrast, is 1.36–1.57× faster in isolation and **not
-   resolvable end-to-end** (98.7 vs 119.5 µs, p = 0.38).
+   resolvable end-to-end** (98.7 vs 119.5 µs, p = 0.37).
 
 4. **At overload the two queues separate qualitatively, not just
    quantitatively.** At 6.4 M orders/s offered, SPSC delivered **6.40 M/s with
@@ -344,7 +344,10 @@ on this host" rather than as evidence about the code.
 ### 5.4 Statistics
 
 Differences are tested with a two-sided permutation test on the difference of
-medians (20 000 resamples, clean runs only). With n = 9–10 per configuration this
+medians (clean runs only). At these sample sizes every label assignment can be
+enumerated, so the test is exact (C(20,10) = 184 756 splits for ten-versus-ten,
+C(19,9) = 92 378 for nine-versus-ten) and the p values carry no resampling error.
+With n = 9–10 per configuration this
 resolves differences of roughly 30 % or more; smaller differences are reported as
 "not distinguishable". Every claim in Section 7 either has a test behind it or is
 labelled as an observation about a single host.
@@ -477,8 +480,8 @@ Fixed: fast-slab book, epoll, default scheduling, 200 000 orders/s.
 
 | metric | mutex | SPSC | ratio |
 |---|---|---|---|
-| p50 | 24.3 µs | 26.8 µs | 0.9× (p = 0.14, noise) |
-| p99 | **71.7 µs** | **38.9 µs** | **1.8×** (p = 0.0009) |
+| p50 | 24.3 µs | 26.8 µs | 0.9× (p = 0.145, noise) |
+| p99 | **71.7 µs** | **38.9 µs** | **1.8×** (p = 0.0008) |
 | service p99.9 | 102.6 µs | 20.7 µs | 5.0× |
 | throughput (unthrottled) | 3.19 M/s | 5.29 M/s | 1.7× |
 | engine CPU per order | 0.32 µs | 0.19 µs | 1.7× |
@@ -490,11 +493,11 @@ and not at p50**:
 
 | comparison (clean runs) | SPSC | mutex | p |
 |---|---|---|---|
-| p50, default / epoll | 26.8 µs | 24.3 µs | 0.14 — not distinguishable |
-| p99, default / epoll | 38.9 µs | 71.7 µs | **0.0009** |
-| p99, pin / epoll | 38.3 µs | 70.9 µs | **0.0017** |
-| service p99.9, pin / epoll | 20.7 µs | 42.0 µs | **0.0007** |
-| total p99.9, pin / epoll (clean) | 86.8 µs | 105.3 µs | 0.14 — not distinguishable |
+| p50, default / epoll | 26.8 µs | 24.3 µs | 0.145 — not distinguishable |
+| p99, default / epoll | 38.9 µs | 71.7 µs | **0.0008** |
+| p99, pin / epoll | 38.3 µs | 70.9 µs | **0.0015** |
+| service p99.9, pin / epoll | 20.7 µs | 42.0 µs | **0.0008** |
+| total p99.9, pin / epoll (clean) | 86.8 µs | 105.3 µs | 0.143 — not distinguishable |
 
 **Mechanism.** At p50 the two queues are the same because at 200 000 orders/s
 the queue is almost never empty; both hand off in nanoseconds. The difference
@@ -537,7 +540,7 @@ the ratio and the spread are the meaningful numbers.
 | V1 map/list/malloc | 24.4 µs | 6.52 ms | 6.50 ms | 11.15 ms | 4.32 M/s |
 
 The honest result is that **slab and heap are not distinguishable end-to-end**:
-98.7 vs 119.5 µs p99.9, permutation p = 0.38, with run ranges of 57.7–147.5 and
+98.7 vs 119.5 µs p99.9, exact permutation p = 0.37, with run ranges of 57.7–147.5 and
 67.9–150.5 µs. At 200 000 orders/s allocation is off the critical path — the
 ~25 µs of ingress and wake-up covers it. A fixed 64-byte `new`/`delete` pair is
 served by glibc's per-thread cache in tens of nanoseconds, and the component
@@ -835,13 +838,13 @@ mechanism, not a correlate. It also changes the failure mode at overload from
 "bistable collapse with 33 ms medians" to "absorbs everything offered".
 
 **3. Does the allocator matter?** Only when the allocation pattern is irregular.
-A fixed-size `new` is as good as a slab in this workload (p = 0.38 end-to-end);
+A fixed-size `new` is as good as a slab in this workload (p = 0.37 end-to-end);
 in isolation the slab is 1.36–1.57× faster with a quarter of the variance. The
 6.5 ms V1 tail comes from growing, pointer-chasing containers (rehash + per-node
 allocation), and the V3+heap control isolates the cause.
 
 **4. Does affinity help?** Not without isolation. Pinning cut the engine's
-run-queue wait 10× but improved p99.9 by 32 % with p = 0.14 — a real mechanism
+run-queue wait 10× but improved p99.9 by 33 % with p = 0.14 — a real mechanism
 without a significant end-to-end effect, because the network thread still floats
 and absorbs the interference. Pinning the *network* thread made p99.9 2.5× worse.
 Realtime priority would have changed the picture, but it was unavailable.
