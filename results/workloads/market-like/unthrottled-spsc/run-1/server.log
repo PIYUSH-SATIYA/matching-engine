@@ -1,0 +1,10 @@
+
+=== workload-market-like-spsc run=1 ===
+orders=2000000 warmup=10000 measured=1990000 accepted=2000000 trades=1394228 rejected=0 invalid=0
+throughput=4119194/s duration=0.483104s
+p50=1354480 p90=37863295 p95=41406753 p99=48170939 p99.9=49582431 max=49603651 ns
+minflt=627 majflt=0 nvcsw=0 nivcsw=3 user=0.480s sys=0.004s migrations=0 kernel_ops=23378 runq=0.034ms
+net: nvcsw=1274 nivcsw=38 user=0.213s sys=0.013s runq=16.602ms
+queue: full_waits=607189 empty_waits=380 offered_rate=0/s
+split: arrival p50=175475 p99=43823417 p99.9=45248351 | service p50=1131663 p99=5463373 p99.9=5667426 ns
+ingest: orders_older_than_1ms=669463 max=45616326 ns

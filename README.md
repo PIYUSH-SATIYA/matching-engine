@@ -144,6 +144,40 @@ scripts/analyze.py             # results/summary.csv, summary.md, analysis.json,
 scripts/analyze_components.py  # results/components-summary.md
 ```
 
+### Profile-driven workloads
+
+The original `load_client` is intentionally unchanged. For synthetic market-like
+loads use `workload_client` and `scripts/run_workload.sh`; these write below
+`results/workloads/` and never mix rows into `results/raw/`.
+
+```bash
+# Build the additional client with the normal Release build.
+cmake -S . -B build-rel -DCMAKE_BUILD_TYPE=Release
+cmake --build build-rel -j"$(nproc)" --target workload_client
+
+# Constant clustered-book traffic, with one percent invalid records and
+# one percent duplicate IDs. Run from a TTY, as with the original benchmarks.
+scripts/run_workload.sh --profile invalid-mix --runs 3 --orders 1010000 \
+  --rate 200000 --invalid-rate 0.01 --duplicate-rate 0.01
+
+# Compare all already-recorded profiles and regenerate the combined report/charts.
+python3 scripts/analyze_workload.py --input results/workloads --recursive
+```
+
+Available profiles are `uniform`, `clustered-book`, `market-like`, `burst`,
+`regime-switch`, and `invalid-mix`. Profiles vary price clustering, side
+imbalance, quantity distributions, regime changes, and arrival bursts. The
+current 40-byte wire protocol represents new orders only: it can measure valid
+resting/crossing orders, duplicate IDs, and parser-invalid fields, but not
+cancels, modifies, IOC/FOK orders, or other order types.
+
+Each workload run records a `manifest.json` containing the seed and generator
+parameters, a server `runs.csv`, client counters, logs, `summary.md`, JSON/CSV
+aggregates, and native SVG charts. `invalid` in the server CSV is parser-invalid
+input; `invalid_generated` and `duplicate_generated` in the workload report are
+client-side generation counters and should not be conflated with matching-engine
+rejections.
+
 Useful overrides:
 
 | Variable | Default | Meaning |
@@ -224,6 +258,7 @@ Limitations that matter when reading the numbers:
 |---|---|
 | [`docs/guide/components/`](docs/guide/components/) | component-by-component implementation tutorial with source citations, V1/V3 explanation, and experiment wiring |
 | [`docs/guide/order-lifecycle.md`](docs/guide/order-lifecycle.md) | complete single-order lifecycle, branch-by-branch outcomes, component variants, and source-code reading guide |
+| [`docs/project-operations-guide.md`](docs/project-operations-guide.md) | setup, native/container builds, incremental C++ workflow, benchmark commands, workload profiles, results, and UI/UX direction |
 | [`docs/guide/how-it-works.md`](docs/guide/how-it-works.md) | start here: the whole design, component by component, then how the benchmarks work and how to read them |
 | [`docs/matching-engine-project-doc.md`](docs/matching-engine-project-doc.md) | final report: design, methodology, results, conclusions |
 | [`docs/matching-engine-report.tex`](docs/matching-engine-report.tex) | the same report as an IEEE-format paper (compile on Overleaf) |

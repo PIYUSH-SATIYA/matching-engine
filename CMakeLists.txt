@@ -146,6 +146,11 @@ target_link_libraries(bench_false_sharing PRIVATE Threads::Threads)
 add_executable(load_client tools/load_client.cpp)
 target_include_directories(load_client PRIVATE include)
 
+# Profile-driven realistic workload generator.  Kept separate from load_client
+# so the original benchmark remains reproducible byte-for-byte.
+add_executable(workload_client tools/workload_client.cpp)
+target_include_directories(workload_client PRIVATE include)
+
 # --- wire protocol parser (split / coalesced / invalid messages) ------------
 add_executable(wire_test tests/test_wire.cpp)
 target_include_directories(wire_test PRIVATE include)

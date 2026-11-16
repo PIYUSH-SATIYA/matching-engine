@@ -1,0 +1,10 @@
+
+=== workload-invalid-mix-spsc run=1 ===
+orders=99977 warmup=1000 measured=98977 accepted=99396 trades=39574 rejected=581 invalid=1023
+throughput=197902/s duration=0.500131s
+p50=35485 p90=86775 p95=141227 p99=289493 p99.9=2817451 max=2829520 ns
+minflt=541 majflt=0 nvcsw=0 nivcsw=4 user=0.502s sys=0.001s migrations=0 kernel_ops=4545 runq=0.044ms
+net: nvcsw=1494 nivcsw=14 user=0.000s sys=0.026s runq=7.015ms
+queue: full_waits=0 empty_waits=1483 offered_rate=200000/s
+split: arrival p50=30937 p99=251922 p99.9=2801284 | service p50=4404 p99=85096 p99.9=235536 ns
+ingest: orders_older_than_1ms=570 max=2828666 ns

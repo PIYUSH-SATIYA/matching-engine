@@ -1,0 +1,10 @@
+
+=== workload-burst-spsc run=1 ===
+orders=101000 warmup=1000 measured=100000 accepted=101000 trades=34090 rejected=0 invalid=0
+throughput=200013/s duration=0.499969s
+p50=27981 p90=65216 p95=126514 p99=1014696 p99.9=2841997 max=2851805 ns
+minflt=392 majflt=0 nvcsw=0 nivcsw=3 user=0.502s sys=0.001s migrations=0 kernel_ops=4576 runq=0.049ms
+net: nvcsw=1507 nivcsw=16 user=0.018s sys=0.004s runq=7.844ms
+queue: full_waits=0 empty_waits=1510 offered_rate=200000/s
+split: arrival p50=23775 p99=977304 p99.9=2826340 | service p50=4475 p99=84208 p99.9=147687 ns
+ingest: orders_older_than_1ms=1030 max=2850651 ns

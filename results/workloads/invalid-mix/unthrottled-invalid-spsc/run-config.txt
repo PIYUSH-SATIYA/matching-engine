@@ -1,0 +1,12 @@
+profile=invalid-mix
+runs=1
+orders=2000000
+rate=0
+seed=42
+queue=spsc
+book=fast-slab
+net=epoll
+sched=pin
+invalid_rate=0.01
+duplicate_rate=0.01
+buy_probability=0.5

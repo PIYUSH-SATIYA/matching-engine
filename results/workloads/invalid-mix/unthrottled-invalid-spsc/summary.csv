@@ -1,0 +1,2 @@
+profile,runs,p50,p95,p99,p999,throughput,accepted,rejected,invalid,trades,queue_full_waits,queue_empty_waits,invalid_generated,duplicate_generated,valid_generated
+invalid-mix,1,738560.0,29491092.0,35342797.0,36291397.0,4144769.0,1970641.0,9190.0,20169.0,1292824.0,440942.0,620.0,20169.0,19822.0,1979831.0

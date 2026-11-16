@@ -1,0 +1,2 @@
+generated,valid,invalid_id,invalid_side,invalid_quantity,duplicate,buys,sells,price_min,price_max,price_mean,quantity_mean,elapsed_s
+2000000,1979831,6729,6763,6677,19822,990071,989760,32156,33478,32795,50.4411,0.441784
