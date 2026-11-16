@@ -1,0 +1,10 @@
+
+=== workload-clustered-book-spsc run=1 ===
+orders=101000 warmup=1000 measured=100000 accepted=101000 trades=38504 rejected=0 invalid=0
+throughput=199957/s duration=0.500108s
+p50=30699 p90=92509 p95=149790 p99=1065381 p99.9=2065438 max=2206011 ns
+minflt=483 majflt=0 nvcsw=0 nivcsw=5 user=0.499s sys=0.002s migrations=0 kernel_ops=4509 runq=2.778ms
+net: nvcsw=1480 nivcsw=9 user=0.006s sys=0.017s runq=9.790ms
+queue: full_waits=0 empty_waits=1451 offered_rate=200000/s
+split: arrival p50=26431 p99=1011347 p99.9=2058994 | service p50=4277 p99=75991 p99.9=105853 ns
+ingest: orders_older_than_1ms=1047 max=2202096 ns

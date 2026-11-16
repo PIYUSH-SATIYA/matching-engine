@@ -1,0 +1,2 @@
+profile,runs,p50,p95,p99,p999,throughput,accepted,rejected,invalid,trades,queue_full_waits,queue_empty_waits,invalid_generated,duplicate_generated,valid_generated
+regime-switch,1,32048.0,127428.0,254492.0,1204415.0,199945.0,101000.0,0.0,0.0,45177.0,0.0,1483.0,0.0,0.0,101000.0

@@ -1,0 +1,2 @@
+profile,runs,p50,p95,p99,p999,throughput,accepted,rejected,invalid,trades,queue_full_waits,queue_empty_waits,invalid_generated,duplicate_generated,valid_generated
+burst,1,27981.0,126514.0,1014696.0,2841997.0,200013.0,101000.0,0.0,0.0,34090.0,0.0,1510.0,0.0,0.0,101000.0

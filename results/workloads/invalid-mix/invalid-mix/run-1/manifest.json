@@ -1,0 +1,22 @@
+{
+  "profile": "invalid-mix",
+  "seed": 42,
+  "orders": 101000,
+  "rate": 200000,
+  "batch": 0,
+  "invalid_rate": 0.01,
+  "duplicate_rate": 0.01,
+  "generated": 101000,
+  "valid_generated": 99977,
+  "invalid_id": 347,
+  "invalid_side": 333,
+  "invalid_quantity": 343,
+  "duplicate_generated": 985,
+  "buys": 51648,
+  "sells": 48329,
+  "price_min": 32241,
+  "price_max": 33308,
+  "price_mean": 32762.8,
+  "quantity_mean": 48.3143,
+  "elapsed_s": 0.504969
+}

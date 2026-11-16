@@ -1,0 +1,10 @@
+
+=== workload-regime-switch-spsc run=1 ===
+orders=101000 warmup=1000 measured=100000 accepted=101000 trades=45177 rejected=0 invalid=0
+throughput=199945/s duration=0.500136s
+p50=32048 p90=76533 p95=127428 p99=254492 p99.9=1204415 max=1357667 ns
+minflt=483 majflt=0 nvcsw=0 nivcsw=4 user=0.500s sys=0.004s migrations=0 kernel_ops=4559 runq=0.038ms
+net: nvcsw=1499 nivcsw=8 user=0.011s sys=0.012s runq=5.003ms
+queue: full_waits=0 empty_waits=1483 offered_rate=200000/s
+split: arrival p50=27068 p99=236303 p99.9=1194434 | service p50=4851 p99=85797 p99.9=130591 ns
+ingest: orders_older_than_1ms=128 max=1353019 ns
